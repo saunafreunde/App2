@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-
+import SessionList from './components/SessionList';
 
 declare global {
     interface Window {
@@ -3505,7 +3505,7 @@ function RootApp() {
   if (loading) return <div className="login-container">Lade...</div>
   if (!user) return <LoginForm />
 
-  return <App />
+  return <SessionList />
 }
 const container = document.getElementById('root');
 const root = createRoot(container!);
