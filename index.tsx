@@ -3484,7 +3484,33 @@ const App = () => {
         </>
     );
 };
+function RootApp() {
+  const [user, setUser] = React.useState(null)
+  const [loading, setLoading] = React.useState(true)
 
+  React.useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data?.user ?? null)
+      setLoading(false)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => listener?.subscription.unsubscribe()
+  }, [])
+
+  if (loading) return <div className="login-container">Lade...</div>
+  if (!user) return <LoginForm />
+
+  return <App />
+}
 const container = document.getElementById('root');
 const root = createRoot(container!);
-root.render(<App />);
+root.render(
+  <React.StrictMode>
+    <RootApp />
+  </React.StrictMode>
+);
