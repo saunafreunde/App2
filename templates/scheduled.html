@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Versand-Queue – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Versand-Queue</div>
+<div class="text-muted-sm mb-4">{{ emails|length }} E-Mail(s) warten — 1-3h Verzögerung für menschlicheres Verhalten</div>
+
+{% if not emails %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-clock-history"></i>
+    <div class="fw-semibold">Keine geplanten Versendungen</div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4" style="width:50px;">#</th>
+          <th>Betreff</th>
+          <th>An</th>
+          <th style="width:140px;">Sendet um</th>
+          <th style="width:130px;">In</th>
+          <th style="width:100px;text-align:right;padding-right:1rem;">Aktion</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        <tr class="email-row">
+          <td class="ps-4 text-muted">{{ e.id }}</td>
+          <td class="fw-semibold" onclick="location.href='/email/{{ e.id }}'">{{ (e.subject or '–')[:55] }}</td>
+          <td class="text-muted">{{ (e.from_address or '')[:35] }}</td>
+          <td class="text-muted" style="font-size:.82rem;">{{ e.send_str }}</td>
+          <td><span class="badge bg-info">{{ e.in_str }}</span></td>
+          <td class="text-end pe-3">
+            <form method="post" action="/scheduled/{{ e.id }}/now" class="d-inline">
+              <button class="btn btn-sm btn-outline-primary" title="Sofort senden">
+                <i class="bi bi-send-fill"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
