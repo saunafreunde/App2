@@ -145,10 +145,18 @@ def main():
             except Exception as e:
                 print(f"Fehler beim verzögerten Versand: {e}")
 
+        def auto_backup():
+            try:
+                bid = db.create_backup(label="Auto-Backup")
+                print(f"  → Auto-Backup #{bid} erstellt")
+            except Exception as e:
+                print(f"Fehler Auto-Backup: {e}")
+
         schedule.every(interval).minutes.do(run_and_catch)
         schedule.every(5).minutes.do(send_scheduled)
         schedule.every().day.at(report_time).do(send_report)
         schedule.every().day.at(todo_time).do(send_todo_list)
+        schedule.every().day.at("02:00").do(auto_backup)
 
         # Telegram-Bot-Thread starten
         try:
