@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Backup – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Datenbank-Backup</div>
+<div class="text-muted-sm mb-4">Backups werden in der All-Inkl MySQL gespeichert und bleiben auch nach Redeployments erhalten.</div>
+
+<!-- Backup erstellen -->
+<div class="card mb-4">
+  <div class="card-body">
+    <h6 class="fw-semibold mb-3"><i class="bi bi-cloud-arrow-up me-2 text-orange"></i>Neues Backup erstellen</h6>
+    <form method="post" action="/backup/create" class="d-flex gap-2 align-items-center flex-wrap">
+      <input type="text" name="label" class="form-control" style="max-width:300px;"
+             placeholder="Bezeichnung (optional, z.B. 'vor Update')" autocomplete="off">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-cloud-arrow-down me-1"></i>Backup erstellen + herunterladen
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Backup-Liste -->
+{% if not backups %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-archive"></i>
+    <div class="fw-semibold">Noch keine Backups vorhanden</div>
+    <div class="text-muted-sm">Erstelle jetzt dein erstes Backup.</div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4" style="width:50px;">#</th>
+          <th>Bezeichnung</th>
+          <th style="width:180px;">Erstellt am</th>
+          <th style="width:100px;">Größe</th>
+          <th style="width:200px;text-align:right;padding-right:1rem;">Aktionen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in backups %}
+        <tr>
+          <td class="ps-4 text-muted">{{ b.id }}</td>
+          <td class="fw-semibold">{{ b.label or '–' }}</td>
+          <td class="text-muted" style="font-size:.83rem;">{{ b.created_at_str }}</td>
+          <td><span class="badge bg-secondary">{{ b.size_kb }} KB</span></td>
+          <td class="text-end pe-3">
+            <button class="btn btn-sm btn-outline-warning me-1"
+                    onclick="openRestore({{ b.id }}, '{{ b.label|e }}', '{{ b.created_at_str }}')"
+                    title="Einspielen">
+              <i class="bi bi-arrow-counterclockwise"></i> Einspielen
+            </button>
+            <form method="post" action="/backup/delete/{{ b.id }}" class="d-inline"
+                  onsubmit="return confirm('Backup #{{ b.id }} wirklich löschen?')">
+              <button class="btn btn-sm btn-outline-danger" title="Löschen">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Restore Bestätigungs-Modal -->
+<div class="modal fade" id="restoreModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="restoreForm">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="bi bi-arrow-counterclockwise text-warning me-2"></i>Backup einspielen</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning mb-3">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            <strong>Achtung:</strong> Alle aktuellen Daten werden gelöscht und durch das Backup ersetzt!
+          </div>
+          <p class="mb-1"><span class="text-muted-sm">Backup:</span></p>
+          <p class="fw-semibold" id="restoreLabel"></p>
+          <p class="text-muted-sm" id="restoreDate"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="submit" class="btn btn-warning btn-sm">
+            <i class="bi bi-arrow-counterclockwise me-1"></i>Jetzt einspielen
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openRestore(id, label, date) {
+  document.getElementById('restoreForm').action = '/backup/restore/' + id;
+  document.getElementById('restoreLabel').textContent = label || ('Backup #' + id);
+  document.getElementById('restoreDate').textContent = date;
+  new bootstrap.Modal(document.getElementById('restoreModal')).show();
+}
+</script>
+{% endblock %}
