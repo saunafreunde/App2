@@ -7,13 +7,24 @@
     <div class="page-header mb-1">Zur Prüfung</div>
     <div class="text-muted-sm">{{ pending|length }} E-Mail(s) — Konto: {{ filter_account or 'alle' }}</div>
   </div>
+  <div class="d-flex gap-2">
+    <a href="?status=pending_review&account={{ filter_account }}"
+       class="btn btn-sm {% if filter_status != 'manual' %}btn-primary{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-hourglass-split me-1"></i>KI-Entwurf
+    </a>
+    <a href="?status=manual&account={{ filter_account }}"
+       class="btn btn-sm {% if filter_status == 'manual' %}btn-warning{% else %}btn-outline-secondary{% endif %}">
+      <i class="bi bi-person-lines-fill me-1"></i>Manuell
+      {% if manual_count > 0 %}<span class="badge bg-dark ms-1">{{ manual_count }}</span>{% endif %}
+    </a>
+  </div>
 </div>
 
 <!-- Filter Pills -->
 <div class="filter-pills mb-3 d-flex flex-wrap gap-2">
-  <a href="?account=" class="btn btn-outline-secondary btn-sm {% if not filter_account %}active{% endif %}">Alle Konten</a>
+  <a href="?status={{ filter_status }}&account=" class="btn btn-outline-secondary btn-sm {% if not filter_account %}active{% endif %}">Alle Konten</a>
   {% for acc in accounts %}
-    <a href="?account={{ acc }}" class="btn btn-outline-secondary btn-sm {% if filter_account == acc %}active{% endif %}">{{ acc }}</a>
+    <a href="?status={{ filter_status }}&account={{ acc }}" class="btn btn-outline-secondary btn-sm {% if filter_account == acc %}active{% endif %}">{{ acc }}</a>
   {% endfor %}
 </div>
 
@@ -103,6 +114,10 @@
                   data-reject-id="{{ e.id }}" data-reject-subject="{{ e.subject or '' }}">
             <i class="bi bi-x-lg"></i>Ablehnen
           </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm"
+                  onclick="openRewrite({{ e.id }}, '{{ (e.subject or '')|e }}')">
+            <i class="bi bi-pencil-square"></i>Neu schreiben
+          </button>
         </div>
       </form>
     </div>
@@ -117,8 +132,52 @@
 {% endif %}
 {% endblock %}
 
+<!-- Rewrite Modal -->
+<div class="modal fade" id="rewriteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="rewriteForm">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="bi bi-pencil-square text-info me-2"></i>Entwurf neu schreiben</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted-sm mb-3" id="rewriteSubject"></p>
+          <label class="form-label fw-semibold">Hinweis für Claude:</label>
+          <textarea name="hint" id="rewriteHint" class="form-control mb-3" rows="3"
+                    placeholder="z.B. Artikel ist nicht lieferbar, auf Englisch antworten, Stammkunde freundlicher Ton …"></textarea>
+          <div class="d-flex flex-wrap gap-2">
+            <span class="text-muted-sm me-1">Schnellauswahl:</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="document.getElementById('rewriteHint').value='Artikel ist leider nicht lieferbar'">Nicht lieferbar</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="document.getElementById('rewriteHint').value='Es handelt sich um eine falsche Bestellung, bitte auf Rücksendung hinweisen'">Falsche Bestellung</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="document.getElementById('rewriteHint').value='Kunde ist Stammkunde, besonders freundlichen und persönlichen Ton wählen'">Stammkunde</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm"
+                    onclick="document.getElementById('rewriteHint').value='Bitte auf Englisch antworten'">Auf Englisch</button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-robot me-1"></i>Neu schreiben lassen
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 {% block scripts %}
 <script>
+function openRewrite(id, subject) {
+  document.getElementById('rewriteForm').action = '/rewrite/' + id;
+  document.getElementById('rewriteSubject').textContent = subject;
+  document.getElementById('rewriteHint').value = '';
+  new bootstrap.Modal(document.getElementById('rewriteModal')).show();
+  setTimeout(()=>document.getElementById('rewriteHint').focus(), 400);
+}
 (function(){
   const all = document.getElementById('checkAll');
   if (!all) return;
