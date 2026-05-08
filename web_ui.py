@@ -164,11 +164,25 @@ def dashboard():
 @app.route("/pending")
 def pending_view():
     filter_account = request.args.get("account", "").strip()
-    pending = db.get_pending_review_emails()
-    for p in pending:
-        p["account_email"] = db.get_account_email_for_id(p["id"]) or p.get("account_email", "")
+    filter_status  = request.args.get("status", "pending_review").strip()
+
+    if filter_status == "manual":
+        pending = db.get_emails_by_status("manual")
+        for p in pending:
+            p.setdefault("draft_reply", "")
+            p.setdefault("confidence", 0)
+            p.setdefault("category", "")
+            p.setdefault("notes", "")
+    else:
+        filter_status = "pending_review"
+        pending = db.get_pending_review_emails()
+        for p in pending:
+            p["account_email"] = db.get_account_email_for_id(p["id"]) or p.get("account_email", "")
+
     if filter_account:
         pending = [p for p in pending if (p.get("account_email") or "") == filter_account]
+
+    manual_count = len(db.get_emails_by_status("manual"))
 
     return render_template(
         "pending.html",
@@ -177,6 +191,8 @@ def pending_view():
         pending=pending,
         accounts=_all_account_emails(),
         filter_account=filter_account,
+        filter_status=filter_status,
+        manual_count=manual_count,
     )
 
 
@@ -292,6 +308,25 @@ def reject(email_id: int):
     if f"/email/{email_id}" in ref:
         return redirect(url_for("pending_view"))
     return redirect(ref or url_for("pending_view"))
+
+
+@app.route("/rewrite/<int:email_id>", methods=["POST"])
+def rewrite(email_id: int):
+    hint = request.form.get("hint", "").strip()
+    if not hint:
+        flash("Bitte einen Hinweis eingeben.", "warning")
+        return redirect(request.referrer or url_for("pending_view"))
+    cfg = load_config()
+    agent.setup(cfg)
+    try:
+        ok = agent.rewrite_draft(email_id, hint)
+        if ok:
+            flash(f"✓ Entwurf für #{email_id} wurde neu geschrieben.", "success")
+        else:
+            flash("E-Mail nicht gefunden.", "danger")
+    except Exception as e:
+        flash(f"Fehler beim Neuschreiben: {e}", "danger")
+    return redirect(request.referrer or url_for("pending_view"))
 
 
 @app.route("/reprocess/<int:email_id>")
@@ -767,16 +802,40 @@ def backup_view():
 
 @app.route("/backup/create", methods=["POST"])
 def backup_create():
+    """Nur in All-Inkl MySQL speichern, kein Download."""
     label = request.form.get("label", "").strip() or None
     try:
         backup_id = db.create_backup(label)
-        # Backup-Daten für Download laden
-        bk = db.get_backup_data(backup_id)
         backups_list = db.get_backups()
         size_kb = next((b["size_kb"] for b in backups_list if b["id"] == backup_id), "?")
-        flash(f"✓ Backup #{backup_id} erstellt ({size_kb} KB) – wird heruntergeladen.", "success")
-        import json as _json
-        json_bytes = _json.dumps(bk["data"], ensure_ascii=False, indent=2).encode("utf-8")
+        flash(f"✓ Backup #{backup_id} in All-Inkl gespeichert ({size_kb} KB).", "success")
+    except Exception as e:
+        flash(f"Backup-Fehler: {e}", "danger")
+    return redirect(url_for("backup_view"))
+
+
+@app.route("/backup/download", methods=["POST"])
+def backup_download():
+    """Nur herunterladen, NICHT in DB speichern."""
+    label = request.form.get("label", "").strip() or None
+    try:
+        conn = db.get_conn()
+        data = {}
+        try:
+            with conn.cursor() as c:
+                for table in db.BACKUP_TABLES:
+                    c.execute(f"SELECT * FROM `{table}`")
+                    rows = c.fetchall()
+                    serialized = []
+                    for row in rows:
+                        r = {}
+                        for k, v in row.items():
+                            r[k] = v.isoformat() if hasattr(v, "isoformat") else v
+                        serialized.append(r)
+                    data[table] = serialized
+        finally:
+            conn.close()
+        json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         return Response(
             json_bytes,
@@ -784,7 +843,7 @@ def backup_create():
             headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
     except Exception as e:
-        flash(f"Backup-Fehler: {e}", "danger")
+        flash(f"Download-Fehler: {e}", "danger")
         return redirect(url_for("backup_view"))
 
 
