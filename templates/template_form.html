@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Vorlage bearbeiten' if t else 'Neue Vorlage' }} – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="/templates" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div class="page-header mb-0">{{ 'Vorlage bearbeiten' if t else 'Neue Vorlage' }}</div>
+</div>
+
+<div class="card" style="max-width:780px;">
+  <div class="card-body p-4">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Name *</label>
+        <input type="text" name="name" class="form-control" required
+               value="{{ t.name if t else '' }}"
+               placeholder="z.B. Versandbestätigung">
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Kategorie</label>
+          <select name="category" class="form-select">
+            {% for c in ['ANFRAGE','BESCHWERDE','BESTELLUNG','SUPPORT','ALLGEMEIN'] %}
+              <option value="{{ c }}" {% if t and t.category==c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Schlüsselwörter (kommagetrennt)</label>
+          <input type="text" name="keywords" class="form-control"
+                 value="{{ kw_str }}"
+                 placeholder="versand, lieferung, paket">
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Betreff-Vorlage *</label>
+        <input type="text" name="subject_template" class="form-control" required
+               value="{{ t.subject_template if t else '' }}"
+               placeholder="Re: Ihre Bestellung">
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Antworttext (OHNE Signatur) *</label>
+        <textarea name="body_template" class="form-control" rows="10" required
+                  style="font-family:inherit;">{{ t.body_template if t else '' }}</textarea>
+        <div class="text-muted-sm mt-1">Die Signatur wird automatisch ergänzt.</div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-success">
+          <i class="bi bi-check-lg"></i>Speichern
+        </button>
+        <a href="/templates" class="btn btn-secondary">Abbrechen</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
