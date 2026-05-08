@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block title %}Zur Prüfung – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-end mb-3">
+  <div>
+    <div class="page-header mb-1">Zur Prüfung</div>
+    <div class="text-muted-sm">{{ pending|length }} E-Mail(s) — Konto: {{ filter_account or 'alle' }}</div>
+  </div>
+</div>
+
+<!-- Filter Pills -->
+<div class="filter-pills mb-3 d-flex flex-wrap gap-2">
+  <a href="?account=" class="btn btn-outline-secondary btn-sm {% if not filter_account %}active{% endif %}">Alle Konten</a>
+  {% for acc in accounts %}
+    <a href="?account={{ acc }}" class="btn btn-outline-secondary btn-sm {% if filter_account == acc %}active{% endif %}">{{ acc }}</a>
+  {% endfor %}
+</div>
+
+{% if not pending %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-check2-circle text-success"></i>
+    <div class="fw-semibold" style="color:#4ade80;">Alles erledigt!</div>
+    <div class="text-muted-sm mt-1">Keine E-Mails zur Prüfung.</div>
+    <a href="/" class="btn btn-outline-primary mt-3">Zum Dashboard</a>
+  </div>
+</div>
+
+{% else %}
+<!-- Bulk Actions -->
+<form method="post" action="/bulk" id="bulkForm">
+  <div class="bulk-bar mb-3">
+    <input type="checkbox" class="form-check-input" id="checkAll">
+    <label for="checkAll" class="text-muted-sm mb-0">Alle wählen</label>
+    <span class="text-muted-sm">| Mit Auswahl:</span>
+    <button type="submit" name="action" value="approve"
+            class="btn btn-success btn-sm"
+            onclick="return confirm('Alle ausgewählten genehmigen?')">
+      <i class="bi bi-check-lg"></i>Genehmigen
+    </button>
+    <button type="submit" name="action" value="reject"
+            class="btn btn-danger btn-sm"
+            onclick="return confirm('Alle ausgewählten ablehnen?')">
+      <i class="bi bi-x-lg"></i>Ablehnen
+    </button>
+    <button type="submit" name="action" value="filtered"
+            class="btn btn-secondary btn-sm"
+            onclick="return confirm('Als Werbung markieren?')">
+      <i class="bi bi-funnel"></i>Als Werbung
+    </button>
+    <span class="ms-auto text-muted-sm" id="selCount">0 ausgewählt</span>
+  </div>
+
+  {% for e in pending %}
+  {% set cat_colors = {'ANFRAGE':'primary','BESCHWERDE':'danger','BESTELLUNG':'success','SUPPORT':'info','ALLGEMEIN':'secondary'} %}
+  <div class="card mb-3 email-card" data-email-id="{{ e.id }}">
+    <div class="card-body p-4">
+      <div class="d-flex justify-content-between align-items-start mb-3">
+        <div class="d-flex gap-3">
+          <input type="checkbox" name="ids" value="{{ e.id }}" class="form-check-input bulk-cb mt-1">
+          <div>
+            <div class="fw-bold mb-1">{{ e.subject or '(kein Betreff)' }}</div>
+            <div class="text-muted-sm">
+              <i class="bi bi-person me-1"></i>{{ e.from_address }}
+              &nbsp;·&nbsp; <i class="bi bi-clock me-1"></i>{{ (e.received_at or '')[:16] }}
+              &nbsp;·&nbsp; ID: {{ e.id }}
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 flex-shrink-0">
+          <span class="badge bg-{{ cat_colors.get(e.category or '', 'secondary') }}">{{ e.category or '–' }}</span>
+          <span class="badge bg-light">{{ ((e.confidence or 0)*100)|int }}%</span>
+        </div>
+      </div>
+
+      {% if e.notes %}
+      <div class="alert alert-light py-2 px-3 mb-3 text-muted-sm">
+        <i class="bi bi-info-circle me-1"></i>{{ e.notes }}
+      </div>
+      {% endif %}
+
+      <form method="post" action="/approve/{{ e.id }}" class="approve-form">
+        <textarea name="edited_draft" class="form-control mb-3"
+                  style="min-height:150px; border-left:3px solid rgba(59,130,246,0.5); border-radius:0 8px 8px 0;"
+                  >{{ e.draft_reply or '' }}</textarea>
+        <div class="d-flex gap-2 flex-wrap">
+          <button type="submit" name="send_now" value="0" class="btn btn-success btn-sm">
+            <i class="bi bi-clock-history"></i>Genehmigen (verzögert 1-3h)
+          </button>
+          <a href="/email/{{ e.id }}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-eye"></i>Vorschau / Detail
+          </a>
+          <a href="/reprocess/{{ e.id }}" class="btn btn-outline-warning btn-sm"
+             onclick="return confirm('Erneut von Claude verarbeiten?')">
+            <i class="bi bi-arrow-clockwise"></i>Neu verarbeiten
+          </a>
+          <button type="button" class="btn btn-outline-info btn-sm"
+                  data-snooze-id="{{ e.id }}" data-snooze-subject="{{ e.subject or '' }}">
+            <i class="bi bi-moon"></i>Snooze
+          </button>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-reject-id="{{ e.id }}" data-reject-subject="{{ e.subject or '' }}">
+            <i class="bi bi-x-lg"></i>Ablehnen
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</form>
+
+<div class="text-muted-sm mt-3 text-center">
+  <kbd>↑</kbd> <kbd>↓</kbd> Karte wählen &nbsp;&nbsp;
+  <kbd>A</kbd> Genehmigen &nbsp;&nbsp; <kbd>R</kbd> Ablehnen &nbsp;&nbsp; <kbd>S</kbd> Snooze
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const all = document.getElementById('checkAll');
+  if (!all) return;
+  const cbs = document.querySelectorAll('.bulk-cb');
+  const counter = document.getElementById('selCount');
+  function update(){ const n=[...cbs].filter(c=>c.checked).length; if(counter) counter.textContent=n+' ausgewählt'; }
+  all.addEventListener('change',()=>{ cbs.forEach(c=>c.checked=all.checked); update(); });
+  cbs.forEach(c=>c.addEventListener('change',update));
+})();
+(function(){
+  const cards=document.querySelectorAll('.email-card');
+  if(!cards.length) return;
+  let idx=0;
+  function highlight(i){ cards.forEach((c,j)=>c.style.outline=j===i?'2px solid rgba(240,128,32,0.5)':''); if(cards[i]) cards[i].scrollIntoView({behavior:'smooth',block:'center'}); }
+  highlight(0);
+  document.addEventListener('keydown',e=>{
+    const t=document.activeElement.tagName;
+    if(t==='TEXTAREA'||t==='INPUT'||t==='SELECT') return;
+    if(e.key==='ArrowDown'||e.key==='ArrowRight'){idx=Math.min(idx+1,cards.length-1);highlight(idx);e.preventDefault();}
+    else if(e.key==='ArrowUp'||e.key==='ArrowLeft'){idx=Math.max(idx-1,0);highlight(idx);e.preventDefault();}
+  });
+})();
+</script>
+{% endblock %}
