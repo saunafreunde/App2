@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login – Levando Email Agent</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at 30% 20%, rgba(240,128,32,0.12) 0%, transparent 55%),
+                  radial-gradient(ellipse at 70% 80%, rgba(45,51,64,0.6) 0%, transparent 55%),
+                  #0d1117;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      padding: 20px;
+    }
+    .login-box {
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 360px;
+    }
+    .logo-icon {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, #f08020, #b05a10);
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+      color: #fff;
+      margin: 0 auto 18px;
+      box-shadow: 0 6px 20px rgba(240,128,32,0.4);
+    }
+    h1 { color: #fff; font-size: 1.25rem; font-weight: 700; text-align: center; margin: 0 0 4px; }
+    .subtitle { color: rgba(255,255,255,0.45); font-size: .82rem; text-align: center; margin-bottom: 28px; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; color: rgba(255,255,255,0.55); font-size: .78rem; font-weight: 500; margin-bottom: 5px; }
+    input {
+      width: 100%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 8px;
+      color: rgba(255,255,255,0.87);
+      padding: 10px 14px;
+      font-size: 15px;
+      font-family: inherit;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+    input::placeholder { color: rgba(255,255,255,0.2); }
+    input:focus {
+      border-color: rgba(240,128,32,0.5);
+      box-shadow: 0 0 0 3px rgba(240,128,32,0.12);
+      background: rgba(255,255,255,0.08);
+    }
+    .btn-login {
+      width: 100%;
+      padding: 11px;
+      margin-top: 6px;
+      background: linear-gradient(135deg, #f08020 0%, #d06010 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: .95rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 5px 0 #8a3c08, 0 7px 14px rgba(0,0,0,0.4);
+      transform: translateY(0);
+      transition: all 0.08s ease;
+    }
+    .btn-login:hover {
+      box-shadow: 0 3px 0 #8a3c08, 0 5px 10px rgba(0,0,0,0.4);
+      transform: translateY(2px);
+    }
+    .btn-login:active {
+      box-shadow: 0 1px 0 #8a3c08;
+      transform: translateY(4px);
+    }
+    .alert-error {
+      background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #f87171;
+      font-size: .85rem;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    @media(max-width:420px){ .login-box{ padding: 30px 22px; } }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="logo-icon"><i class="bi bi-envelope-check"></i></div>
+    <h1>Levando Email Agent</h1>
+    <p class="subtitle">KI-gestützter E-Mail-Assistent</p>
+
+    {% with msgs = get_flashed_messages() %}
+      {% if msgs %}
+        <div class="alert-error"><i class="bi bi-exclamation-circle"></i>{{ msgs[0] }}</div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="post">
+      <div class="form-group">
+        <label>Benutzer</label>
+        <input type="text" name="user" placeholder="Benutzername" autocomplete="username" autofocus required>
+      </div>
+      <div class="form-group">
+        <label>Passwort</label>
+        <input type="password" name="pw" placeholder="••••••••" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-login">
+        <i class="bi bi-box-arrow-in-right" style="margin-right:6px;"></i>Einloggen
+      </button>
+    </form>
+  </div>
+</body>
+</html>
