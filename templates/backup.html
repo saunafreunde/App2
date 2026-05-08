@@ -9,13 +9,25 @@
 <div class="card mb-4">
   <div class="card-body">
     <h6 class="fw-semibold mb-3"><i class="bi bi-cloud-arrow-up me-2 text-orange"></i>Neues Backup erstellen</h6>
-    <form method="post" action="/backup/create" class="d-flex gap-2 align-items-center flex-wrap">
-      <input type="text" name="label" class="form-control" style="max-width:300px;"
-             placeholder="Bezeichnung (optional, z.B. 'vor Update')" autocomplete="off">
-      <button type="submit" class="btn btn-primary">
-        <i class="bi bi-cloud-arrow-down me-1"></i>Backup erstellen + herunterladen
-      </button>
-    </form>
+    <div class="d-flex gap-2 align-items-end flex-wrap">
+      <div>
+        <label class="form-label text-muted-sm mb-1">Bezeichnung (optional)</label>
+        <input type="text" id="backupLabel" class="form-control" style="min-width:260px;"
+               placeholder="z.B. 'vor Update'" autocomplete="off">
+      </div>
+      <form method="post" action="/backup/create" id="formSave">
+        <input type="hidden" name="label" id="labelSave">
+        <button type="submit" class="btn btn-primary" onclick="document.getElementById('labelSave').value=document.getElementById('backupLabel').value">
+          <i class="bi bi-cloud-check me-1"></i>In All-Inkl speichern
+        </button>
+      </form>
+      <form method="post" action="/backup/download" id="formDownload">
+        <input type="hidden" name="label" id="labelDownload">
+        <button type="submit" class="btn btn-outline-primary" onclick="document.getElementById('labelDownload').value=document.getElementById('backupLabel').value">
+          <i class="bi bi-download me-1"></i>Herunterladen
+        </button>
+      </form>
+    </div>
   </div>
 </div>
 
