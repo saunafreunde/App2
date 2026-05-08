@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}E-Mail Agent{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+</head>
+<body>
+
+<!-- Mobile Top-Bar -->
+<div class="topbar-mobile">
+  <button class="toggle-btn" id="sidebarToggle" aria-label="Menü öffnen">
+    <i class="bi bi-list"></i>
+  </button>
+  <div class="brand-mobile"><i class="bi bi-envelope-check me-1"></i>Mail Agent</div>
+  <a href="/logout" class="text-decoration-none" style="color:rgba(255,255,255,0.5);">
+    <i class="bi bi-box-arrow-right"></i>
+  </a>
+</div>
+
+<!-- Backdrop -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-icon"><i class="bi bi-envelope-check"></i></div>
+      Mail Agent
+    </div>
+    <nav>
+      <ul class="nav flex-column" style="list-style:none; margin:0; padding:0;">
+        <li>
+          <a class="nav-link {% if active=='dashboard' %}active{% endif %}" href="/">
+            <i class="bi bi-speedometer2"></i>Dashboard
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='pending' %}active{% endif %}" href="/pending">
+            <i class="bi bi-hourglass-split"></i>Zur Prüfung
+            {% if pending_count > 0 %}
+              <span class="badge-nav">{{ pending_count }}</span>
+            {% endif %}
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='aufgaben' %}active{% endif %}" href="/aufgaben">
+            <i class="bi bi-bookmark-star"></i>Aufgaben
+            {% if aufgaben_count > 0 %}
+              <span class="badge-nav badge-nav-warn">{{ aufgaben_count }}</span>
+            {% endif %}
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='scheduled' %}active{% endif %}" href="/scheduled">
+            <i class="bi bi-clock-history"></i>Geplant
+            {% if scheduled_count > 0 %}
+              <span class="badge-nav badge-nav-info">{{ scheduled_count }}</span>
+            {% endif %}
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='snoozed' %}active{% endif %}" href="/snoozed">
+            <i class="bi bi-moon"></i>Snooze
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='sent' %}active{% endif %}" href="/sent">
+            <i class="bi bi-send-check"></i>Gesendet
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='manual' %}active{% endif %}" href="/manual">
+            <i class="bi bi-person-lines-fill"></i>Manuell
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='filtered' %}active{% endif %}" href="/filtered">
+            <i class="bi bi-funnel"></i>Gefiltert
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='rejected' %}active{% endif %}" href="/rejected">
+            <i class="bi bi-x-octagon"></i>Abgelehnt
+          </a>
+        </li>
+
+        <div class="nav-section">Verwalten</div>
+        <li>
+          <a class="nav-link {% if active=='templates' %}active{% endif %}" href="/templates">
+            <i class="bi bi-file-text"></i>Vorlagen
+          </a>
+        </li>
+        <li>
+          <a class="nav-link {% if active=='log' %}active{% endif %}" href="/log">
+            <i class="bi bi-journal-text"></i>Aktivitäten
+          </a>
+        </li>
+
+        <div class="nav-section">Aktionen</div>
+        <li>
+          <a class="nav-link" href="/run" onclick="return confirm('Jetzt E-Mails abrufen und verarbeiten?')">
+            <i class="bi bi-arrow-repeat"></i>Jetzt prüfen
+          </a>
+        </li>
+        <li>
+          <a class="nav-link" href="/telegram/report" onclick="return confirm('Report jetzt per Telegram senden?')">
+            <i class="bi bi-telegram"></i>Report senden
+          </a>
+        </li>
+        <li>
+          <a class="nav-link" href="/telegram/test">
+            <i class="bi bi-send"></i>Telegram testen
+          </a>
+        </li>
+        <li>
+          <a class="nav-link" href="/todo/generate" onclick="return confirm('Tages-ToDo-Liste jetzt erzeugen?')">
+            <i class="bi bi-list-check"></i>ToDo-Liste
+          </a>
+        </li>
+
+        <div class="nav-section" style="margin-top:auto;">Konto</div>
+        <li>
+          <a class="nav-link" href="/logout">
+            <i class="bi bi-box-arrow-right"></i>Abmelden
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Search Bar -->
+    <form action="/search" method="get" class="mb-4">
+      <div class="input-group" style="max-width:440px;">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="text" name="q" class="form-control border-start-0"
+               placeholder="E-Mails suchen …"
+               value="{{ request.args.get('q','') }}" autocomplete="off">
+        <button class="btn btn-secondary" type="submit">Suchen</button>
+      </div>
+    </form>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }} alert-dismissible mb-3" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>
+        </div>
+      {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="rejectForm">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="bi bi-x-circle text-danger me-2"></i>E-Mail ablehnen</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted-sm mb-2" id="rejectSubject"></p>
+          <label class="form-label">Begründung (optional):</label>
+          <textarea name="reason" id="rejectReason" class="form-control"
+                    rows="3" placeholder="z.B. Ton zu förmlich …"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Abbrechen</button>
+          <button type="submit" class="btn btn-danger btn-sm">
+            <i class="bi bi-x-lg me-1"></i>Ablehnen
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Snooze Modal -->
+<div class="modal fade" id="snoozeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" id="snoozeForm">
+        <div class="modal-header">
+          <h6 class="modal-title"><i class="bi bi-moon text-info me-2"></i>Erinnerung später</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted-sm mb-3" id="snoozeSubject"></p>
+          <div class="d-grid gap-2">
+            <button type="submit" name="when" value="1h"       class="btn btn-outline-primary btn-sm">In 1 Stunde</button>
+            <button type="submit" name="when" value="3h"       class="btn btn-outline-primary btn-sm">In 3 Stunden</button>
+            <button type="submit" name="when" value="tomorrow" class="btn btn-outline-primary btn-sm">Morgen 8:00</button>
+            <button type="submit" name="when" value="monday"   class="btn btn-outline-primary btn-sm">Nächsten Montag 8:00</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
