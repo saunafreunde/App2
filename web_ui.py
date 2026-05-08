@@ -13,7 +13,7 @@ from functools import wraps
 from pathlib import Path
 from datetime import datetime, timedelta
 from flask import (Flask, render_template, redirect, url_for,
-                   request, flash, jsonify, session)
+                   request, flash, jsonify, session, Response)
 
 # Windows UTF-8
 if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
@@ -130,30 +130,11 @@ def _filter_emails(rows: list, account: str = "", period: str = "",
 
 
 def _get_emails_by_status(status: str, limit: int = 500) -> list:
-    conn = db.get_conn()
-    try:
-        rows = conn.execute(
-            "SELECT id, from_address, subject, received_at, processed_at, "
-            "category, account_email, confidence, notes, snooze_until "
-            "FROM emails WHERE status=? ORDER BY received_at DESC LIMIT ?",
-            (status, limit)
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    return db.get_emails_by_status(status, limit)
 
 
 def _get_activity_log(limit: int = 100) -> list:
-    conn = db.get_conn()
-    try:
-        rows = conn.execute(
-            "SELECT timestamp, action, email_id, details "
-            "FROM activity_log ORDER BY id DESC LIMIT ?",
-            (limit,)
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    return db.get_activity_log(limit)
 
 
 # ── Routen: Dashboard ─────────────────────────────────────────────────────────
@@ -184,13 +165,8 @@ def dashboard():
 def pending_view():
     filter_account = request.args.get("account", "").strip()
     pending = db.get_pending_review_emails()
-    conn = db.get_conn()
-    try:
-        for p in pending:
-            row = conn.execute("SELECT account_email FROM emails WHERE id=?", (p["id"],)).fetchone()
-            if row: p["account_email"] = row["account_email"]
-    finally:
-        conn.close()
+    for p in pending:
+        p["account_email"] = db.get_account_email_for_id(p["id"]) or p.get("account_email", "")
     if filter_account:
         pending = [p for p in pending if (p.get("account_email") or "") == filter_account]
 
@@ -774,6 +750,63 @@ def telegram_report():
     except Exception as e:
         flash(f"Fehler: {e}", "danger")
     return redirect(url_for("dashboard"))
+
+
+# ── Backup / Restore ─────────────────────────────────────────────────────────
+
+@app.route("/backup")
+def backup_view():
+    backups = db.get_backups()
+    return render_template(
+        "backup.html",
+        active="backup",
+        pending_count=_pending_count(),
+        backups=backups,
+    )
+
+
+@app.route("/backup/create", methods=["POST"])
+def backup_create():
+    label = request.form.get("label", "").strip() or None
+    try:
+        backup_id = db.create_backup(label)
+        # Backup-Daten für Download laden
+        bk = db.get_backup_data(backup_id)
+        backups_list = db.get_backups()
+        size_kb = next((b["size_kb"] for b in backups_list if b["id"] == backup_id), "?")
+        flash(f"✓ Backup #{backup_id} erstellt ({size_kb} KB) – wird heruntergeladen.", "success")
+        import json as _json
+        json_bytes = _json.dumps(bk["data"], ensure_ascii=False, indent=2).encode("utf-8")
+        filename = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        return Response(
+            json_bytes,
+            mimetype="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        flash(f"Backup-Fehler: {e}", "danger")
+        return redirect(url_for("backup_view"))
+
+
+@app.route("/backup/restore/<int:backup_id>", methods=["POST"])
+def backup_restore(backup_id: int):
+    try:
+        restored = db.restore_backup(backup_id)
+        total = sum(restored.values())
+        flash(f"✓ Backup #{backup_id} eingespielt – {total} Datensätze wiederhergestellt.", "success")
+    except Exception as e:
+        flash(f"Restore-Fehler: {e}", "danger")
+    return redirect(url_for("backup_view"))
+
+
+@app.route("/backup/delete/<int:backup_id>", methods=["POST"])
+def backup_delete(backup_id: int):
+    try:
+        db.delete_backup(backup_id)
+        flash(f"Backup #{backup_id} gelöscht.", "warning")
+    except Exception as e:
+        flash(f"Fehler: {e}", "danger")
+    return redirect(url_for("backup_view"))
 
 
 # ── Start ─────────────────────────────────────────────────────────────────────
