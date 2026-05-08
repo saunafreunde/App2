@@ -14,6 +14,8 @@ ARG CACHE_BUST=1
 RUN echo "Build: $CACHE_BUST"
 
 COPY *.py ./
+COPY templates/ ./templates/
+COPY static/ ./static/
 
 RUN mkdir -p /app/data /app/reports
 
