@@ -886,6 +886,51 @@ def reprocess_email(email_id: int):
     return True
 
 
+def rewrite_draft(email_id: int, hint: str) -> bool:
+    """Schreibt den Entwurf mit einem Benutzer-Hinweis neu (ohne Tool-Calls, direkter Claude-Aufruf)."""
+    row = db.get_email_by_id(email_id)
+    if not row:
+        return False
+
+    company  = _config.get("agent", {}).get("company_name", "Levando GmbH")
+    original = row.get("body", "")[:2000]
+    subject  = row.get("subject", "")
+    sender   = row.get("from_address", "")
+    old_draft = row.get("draft_reply", "") or ""
+
+    prompt = f"""Du schreibst eine Antwort-E-Mail für {company}.
+
+URSPRÜNGLICHE E-MAIL:
+Von: {sender}
+Betreff: {subject}
+Inhalt: {original}
+
+BISHERIGER ENTWURF:
+{old_draft[:1000]}
+
+WICHTIGER HINWEIS VOM BENUTZER:
+{hint}
+
+Schreibe eine neue, verbesserte Antwort unter Berücksichtigung des Hinweises.
+Antworte auf Deutsch, schreibe wie ein echter Mensch (kein Formular-Deutsch).
+Keine Grußformel/Signatur am Ende – wird automatisch ergänzt.
+Gib NUR den Antworttext zurück, ohne Einleitung oder Erklärung."""
+
+    response = _client.messages.create(
+        model=_config.get("claude", {}).get("model", "claude-haiku-4-5-20251001"),
+        max_tokens=1500,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    new_draft = response.content[0].text.strip()
+
+    db.update_email(email_id,
+                    draft_reply=new_draft,
+                    status="pending_review",
+                    notes=f"Neu geschrieben mit Hinweis: {hint[:100]}")
+    db.log_activity("rewrite", email_id, f"Hinweis: {hint[:100]}")
+    return True
+
+
 def reject_email(email_id: int, reason: str = ""):
     row = db.get_email_by_id(email_id)
     db.update_email(email_id, status="rejected",
