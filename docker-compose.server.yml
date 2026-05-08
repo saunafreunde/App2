@@ -37,10 +37,13 @@ services:
       - AGENT_LANGUAGE=${AGENT_LANGUAGE}
       - BUSINESS_HOURS_START=${BUSINESS_HOURS_START}
       - BUSINESS_HOURS_END=${BUSINESS_HOURS_END}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
     volumes:
-      - email_data:/app/data
       - email_reports:/app/reports
     command: python run.py daemon
     networks:
@@ -83,6 +86,10 @@ services:
       - AGENT_LANGUAGE=${AGENT_LANGUAGE}
       - BUSINESS_HOURS_START=${BUSINESS_HOURS_START}
       - BUSINESS_HOURS_END=${BUSINESS_HOURS_END}
+      - DB_HOST=${DB_HOST}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
       - WEBUI_USER=${WEBUI_USER}
       - WEBUI_PASSWORD=${WEBUI_PASSWORD}
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
@@ -91,7 +98,6 @@ services:
     ports:
       - "127.0.0.1:5000:5000"
     volumes:
-      - email_data:/app/data
       - email_reports:/app/reports
     command: gunicorn --bind 0.0.0.0:5000 --workers 2 web_ui:app
     depends_on:
@@ -106,7 +112,6 @@ services:
       - "traefik.http.services.levando-webui.loadbalancer.server.port=5000"
 
 volumes:
-  email_data:
   email_reports:
 
 networks:
