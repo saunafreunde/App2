@@ -1,0 +1,114 @@
+services:
+
+  email-agent:
+    image: ghcr.io/saunafreunde/app2:latest
+    pull_policy: always
+    container_name: levando-email-agent
+    restart: unless-stopped
+    environment:
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL}
+      - ACCOUNT1_EMAIL=${ACCOUNT1_EMAIL}
+      - ACCOUNT1_PASSWORD=${ACCOUNT1_PASSWORD}
+      - ACCOUNT1_IMAP_SERVER=${ACCOUNT1_IMAP_SERVER}
+      - ACCOUNT1_IMAP_PORT=${ACCOUNT1_IMAP_PORT}
+      - ACCOUNT1_SMTP_SERVER=${ACCOUNT1_SMTP_SERVER}
+      - ACCOUNT1_SMTP_PORT=${ACCOUNT1_SMTP_PORT}
+      - ACCOUNT2_EMAIL=${ACCOUNT2_EMAIL}
+      - ACCOUNT2_PASSWORD=${ACCOUNT2_PASSWORD}
+      - ACCOUNT2_IMAP_SERVER=${ACCOUNT2_IMAP_SERVER}
+      - ACCOUNT2_IMAP_PORT=${ACCOUNT2_IMAP_PORT}
+      - ACCOUNT2_SMTP_SERVER=${ACCOUNT2_SMTP_SERVER}
+      - ACCOUNT2_SMTP_PORT=${ACCOUNT2_SMTP_PORT}
+      - ACCOUNT3_EMAIL=${ACCOUNT3_EMAIL}
+      - ACCOUNT3_PASSWORD=${ACCOUNT3_PASSWORD}
+      - ACCOUNT3_IMAP_SERVER=${ACCOUNT3_IMAP_SERVER}
+      - ACCOUNT3_IMAP_PORT=${ACCOUNT3_IMAP_PORT}
+      - ACCOUNT3_SMTP_SERVER=${ACCOUNT3_SMTP_SERVER}
+      - ACCOUNT3_SMTP_PORT=${ACCOUNT3_SMTP_PORT}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - AGENT_AUTO_REPLY_THRESHOLD=${AGENT_AUTO_REPLY_THRESHOLD}
+      - AGENT_REPORT_EMAIL=${AGENT_REPORT_EMAIL}
+      - AGENT_REPORT_TIME=${AGENT_REPORT_TIME}
+      - AGENT_TODO_TIME=${AGENT_TODO_TIME}
+      - AGENT_CHECK_INTERVAL_MINUTES=${AGENT_CHECK_INTERVAL_MINUTES}
+      - AGENT_COMPANY_NAME=${AGENT_COMPANY_NAME}
+      - AGENT_LANGUAGE=${AGENT_LANGUAGE}
+      - BUSINESS_HOURS_START=${BUSINESS_HOURS_START}
+      - BUSINESS_HOURS_END=${BUSINESS_HOURS_END}
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    volumes:
+      - email_data:/app/data
+      - email_reports:/app/reports
+    command: python run.py daemon
+    networks:
+      - email-net
+
+  web-ui:
+    image: ghcr.io/saunafreunde/app2:latest
+    pull_policy: always
+    container_name: levando-email-webui
+    restart: unless-stopped
+    environment:
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - CLAUDE_MODEL=${CLAUDE_MODEL}
+      - ACCOUNT1_EMAIL=${ACCOUNT1_EMAIL}
+      - ACCOUNT1_PASSWORD=${ACCOUNT1_PASSWORD}
+      - ACCOUNT1_IMAP_SERVER=${ACCOUNT1_IMAP_SERVER}
+      - ACCOUNT1_IMAP_PORT=${ACCOUNT1_IMAP_PORT}
+      - ACCOUNT1_SMTP_SERVER=${ACCOUNT1_SMTP_SERVER}
+      - ACCOUNT1_SMTP_PORT=${ACCOUNT1_SMTP_PORT}
+      - ACCOUNT2_EMAIL=${ACCOUNT2_EMAIL}
+      - ACCOUNT2_PASSWORD=${ACCOUNT2_PASSWORD}
+      - ACCOUNT2_IMAP_SERVER=${ACCOUNT2_IMAP_SERVER}
+      - ACCOUNT2_IMAP_PORT=${ACCOUNT2_IMAP_PORT}
+      - ACCOUNT2_SMTP_SERVER=${ACCOUNT2_SMTP_SERVER}
+      - ACCOUNT2_SMTP_PORT=${ACCOUNT2_SMTP_PORT}
+      - ACCOUNT3_EMAIL=${ACCOUNT3_EMAIL}
+      - ACCOUNT3_PASSWORD=${ACCOUNT3_PASSWORD}
+      - ACCOUNT3_IMAP_SERVER=${ACCOUNT3_IMAP_SERVER}
+      - ACCOUNT3_IMAP_PORT=${ACCOUNT3_IMAP_PORT}
+      - ACCOUNT3_SMTP_SERVER=${ACCOUNT3_SMTP_SERVER}
+      - ACCOUNT3_SMTP_PORT=${ACCOUNT3_SMTP_PORT}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - AGENT_AUTO_REPLY_THRESHOLD=${AGENT_AUTO_REPLY_THRESHOLD}
+      - AGENT_REPORT_EMAIL=${AGENT_REPORT_EMAIL}
+      - AGENT_REPORT_TIME=${AGENT_REPORT_TIME}
+      - AGENT_TODO_TIME=${AGENT_TODO_TIME}
+      - AGENT_CHECK_INTERVAL_MINUTES=${AGENT_CHECK_INTERVAL_MINUTES}
+      - AGENT_COMPANY_NAME=${AGENT_COMPANY_NAME}
+      - AGENT_LANGUAGE=${AGENT_LANGUAGE}
+      - BUSINESS_HOURS_START=${BUSINESS_HOURS_START}
+      - BUSINESS_HOURS_END=${BUSINESS_HOURS_END}
+      - WEBUI_USER=${WEBUI_USER}
+      - WEBUI_PASSWORD=${WEBUI_PASSWORD}
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      - PYTHONUNBUFFERED=1
+      - PYTHONIOENCODING=utf-8
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - email_data:/app/data
+      - email_reports:/app/reports
+    command: gunicorn --bind 0.0.0.0:5000 --workers 2 web_ui:app
+    depends_on:
+      - email-agent
+    networks:
+      - email-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.levando-webui.rule=Host(`email.levando.gmbh`)"
+      - "traefik.http.routers.levando-webui.entrypoints=websecure"
+      - "traefik.http.routers.levando-webui.tls.certresolver=letsencrypt"
+      - "traefik.http.services.levando-webui.loadbalancer.server.port=5000"
+
+volumes:
+  email_data:
+  email_reports:
+
+networks:
+  email-net:
+    driver: bridge

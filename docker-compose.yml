@@ -1,0 +1,36 @@
+services:
+
+  email-agent:
+    build: .
+    container_name: email-agent
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - email_data:/app/data
+      - email_reports:/app/reports
+    networks:
+      - email-net
+
+  web-ui:
+    build: .
+    container_name: email-webui
+    restart: unless-stopped
+    command: gunicorn --bind 0.0.0.0:5000 --workers 2 web_ui:app
+    env_file: .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - email_data:/app/data
+      - email_reports:/app/reports
+    depends_on:
+      - email-agent
+    networks:
+      - email-net
+
+volumes:
+  email_data:
+  email_reports:
+
+networks:
+  email-net:
+    driver: bridge

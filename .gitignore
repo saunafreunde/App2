@@ -1,0 +1,12 @@
+# Secrets – niemals auf GitHub!
+.env
+config.json
+.hostinger_token
+
+# Daten & Logs
+data/
+reports/
+__pycache__/
+*.pyc
+*.db
+*.log

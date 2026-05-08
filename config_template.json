@@ -1,0 +1,24 @@
+{
+  "email": {
+    "imap_server": "mail.ihre-domain.de",
+    "imap_port": 993,
+    "smtp_server": "mail.ihre-domain.de",
+    "smtp_port": 465,
+    "smtp_ssl": true,
+    "email": "info@ihre-domain.de",
+    "password": "IHR_PASSWORT",
+    "check_interval_minutes": 15,
+    "signature": "\n\nMit freundlichen Grüßen\n[Ihr Name / Firma]"
+  },
+  "claude": {
+    "api_key": "sk-ant-...",
+    "model": "claude-opus-4-6"
+  },
+  "agent": {
+    "auto_reply_threshold": 0.80,
+    "report_email": "info@ihre-domain.de",
+    "report_time": "18:00",
+    "company_name": "Meine Firma",
+    "language": "de"
+  }
+}
