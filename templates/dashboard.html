@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – Mail Agent{% endblock %}
+
+{% block content %}
+<meta http-equiv="refresh" content="60">
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <div class="page-header">Dashboard</div>
+    <div class="text-muted-sm mt-1">{{ date }}&nbsp;&nbsp;·&nbsp;&nbsp;{{ accounts_str }}</div>
+  </div>
+  <a href="/run" class="btn btn-primary" onclick="return confirm('E-Mails jetzt abrufen?')">
+    <i class="bi bi-arrow-repeat"></i>Jetzt prüfen
+  </a>
+</div>
+
+<!-- Stats Row -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-2">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon orange"><i class="bi bi-envelope"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.total or 0 }}</div>
+          <div class="stat-label">Heute gesamt</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-2">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon green"><i class="bi bi-send-check"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.auto_sent or 0 }}</div>
+          <div class="stat-label">Auto gesendet</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-2">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon yellow"><i class="bi bi-hourglass-split"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.pending_review or 0 }}</div>
+          <div class="stat-label">Zur Prüfung</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-2">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon blue"><i class="bi bi-person-lines-fill"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.manual or 0 }}</div>
+          <div class="stat-label">Manuell</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-2">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon gray"><i class="bi bi-funnel"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.filtered or 0 }}</div>
+          <div class="stat-label">Gefiltert</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-2">
+    <div class="card stat-card h-100">
+      <div class="card-body d-flex align-items-center gap-3">
+        <div class="stat-icon red"><i class="bi bi-x-octagon"></i></div>
+        <div>
+          <div class="stat-value">{{ stats.rejected or 0 }}</div>
+          <div class="stat-label">Abgelehnt</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart + Health -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-bar-chart-line text-primary"></i>
+        <span class="fw-semibold">Letzte 7 Tage</span>
+      </div>
+      <div class="card-body">
+        <canvas id="weekChart" height="100"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-heart-pulse text-danger"></i>
+        <span class="fw-semibold">System-Status</span>
+      </div>
+      <div class="card-body" id="healthBox">
+        <div class="text-muted-sm"><span class="health-dot health-unknown"></span>IMAP wird geprüft...</div>
+        <div class="text-muted-sm"><span class="health-dot health-unknown"></span>SMTP wird geprüft...</div>
+        <div class="text-muted-sm"><span class="health-dot health-unknown"></span>Claude-API wird geprüft...</div>
+        <div class="text-muted-sm"><span class="health-dot health-unknown"></span>Telegram wird geprüft...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Analytics Row -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-x-circle text-danger"></i>
+        <span class="fw-semibold">Top Ablehnungsgründe</span>
+      </div>
+      <div class="card-body">
+        {% if top_rejections %}
+          {% for r in top_rejections %}
+          <div class="mb-2 d-flex align-items-center gap-2" style="font-size:.85rem;">
+            <span class="badge bg-danger">{{ r.count }}×</span>
+            <span style="color:rgba(255,255,255,0.65);">{{ (r.reason or '')[:55] }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-muted-sm">Noch keine Ablehnungen mit Begründung.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-people text-primary"></i>
+        <span class="fw-semibold">Top Absender (30 Tage)</span>
+      </div>
+      <div class="card-body">
+        {% if top_senders %}
+          {% for s in top_senders %}
+          <div class="mb-2 d-flex align-items-center gap-2" style="font-size:.85rem;">
+            <span class="badge bg-primary">{{ s.total }}</span>
+            <span style="color:rgba(255,255,255,0.65);">{{ (s.from_address or '')[:48] }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-muted-sm">Noch keine Daten.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-graph-up text-success"></i>
+        <span class="fw-semibold">Genauigkeit</span>
+      </div>
+      <div class="card-body">
+        {% if accuracy %}
+          {% for a in accuracy %}
+          <div class="mb-2 d-flex justify-content-between align-items-center" style="font-size:.85rem;">
+            <span style="color:rgba(255,255,255,0.7);">{{ a.category }} <span class="text-muted-sm">({{ a.total }})</span></span>
+            <span class="badge bg-{{ 'success' if a.accuracy >= 0.85 else ('warning' if a.accuracy >= 0.6 else 'danger') }}">
+              {{ (a.accuracy*100)|int }}%
+            </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-muted-sm">Mindestens 2 Mails pro Kategorie nötig.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Pending Quick-List -->
+{% if pending %}
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-hourglass-split text-warning"></i>
+      <span class="fw-semibold">Warten auf Prüfung</span>
+    </div>
+    <a href="/pending" class="btn btn-outline-primary btn-sm">Alle bearbeiten</a>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4" style="width:44px;">#</th>
+          <th>Betreff</th>
+          <th>Von</th>
+          <th style="width:110px;">Konfidenz</th>
+          <th style="width:105px;">Kategorie</th>
+          <th style="width:110px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in pending %}
+        {% set cat_colors = {'ANFRAGE':'primary','BESCHWERDE':'danger','BESTELLUNG':'success','SUPPORT':'info','ALLGEMEIN':'secondary'} %}
+        <tr class="email-row">
+          <td class="ps-4 text-muted" onclick="location.href='/email/{{ e.id }}'">{{ e.id }}</td>
+          <td class="fw-semibold" onclick="location.href='/email/{{ e.id }}'">{{ (e.subject or '–')[:55] }}</td>
+          <td class="text-muted" onclick="location.href='/email/{{ e.id }}'">{{ (e.from_address or '')[:38] }}</td>
+          <td onclick="location.href='/email/{{ e.id }}'">
+            <div class="conf-bar"><div class="conf-fill bg-{{ 'success' if (e.confidence or 0) >= 0.75 else 'warning' }} conf-fill" style="width:{{ ((e.confidence or 0)*100)|int }}%"></div></div>
+            <div class="text-muted-sm mt-1">{{ ((e.confidence or 0)*100)|int }}%</div>
+          </td>
+          <td onclick="location.href='/email/{{ e.id }}'">
+            <span class="badge bg-{{ cat_colors.get(e.category or '', 'secondary') }}">{{ e.category or '–' }}</span>
+          </td>
+          <td class="pe-3 text-end">
+            <a href="/email/{{ e.id }}" class="btn btn-outline-primary btn-sm py-0 px-2 me-1" title="Bearbeiten"><i class="bi bi-pencil"></i></a>
+            <button type="button" class="btn btn-outline-info btn-sm py-0 px-2 me-1"
+                    data-snooze-id="{{ e.id }}" data-snooze-subject="{{ e.subject or '' }}" title="Snooze">
+              <i class="bi bi-moon"></i></button>
+            <button type="button" class="btn btn-outline-danger btn-sm py-0 px-2"
+                    data-reject-id="{{ e.id }}" data-reject-subject="{{ e.subject or '' }}" title="Ablehnen">
+              <i class="bi bi-x-lg"></i></button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Weekly chart
+fetch('/api/weekly_stats').then(r=>r.json()).then(data=>{
+  const labels = data.map(d=>d.date ? d.date.slice(5) : '');
+  const ctx = document.getElementById('weekChart');
+  if (!ctx) return;
+  new Chart(ctx.getContext('2d'),{
+    type:'bar',
+    data:{labels, datasets:[
+      {label:'Auto gesendet', data:data.map(d=>d.auto_sent||0),    backgroundColor:'rgba(34,197,94,0.7)'},
+      {label:'Zur Prüfung',   data:data.map(d=>d.pending_review||0),backgroundColor:'rgba(234,179,8,0.7)'},
+      {label:'Gefiltert',     data:data.map(d=>d.filtered||0),      backgroundColor:'rgba(107,114,128,0.5)'},
+    ]},
+    options:{
+      responsive:true,
+      plugins:{
+        legend:{position:'bottom', labels:{color:'rgba(255,255,255,0.5)', font:{size:11}, boxWidth:12}},
+      },
+      scales:{
+        x:{stacked:true, ticks:{color:'rgba(255,255,255,0.4)'}, grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{stacked:true, beginAtZero:true, ticks:{stepSize:1, color:'rgba(255,255,255,0.4)'}, grid:{color:'rgba(255,255,255,0.06)'}},
+      }
+    }
+  });
+});
+
+// System health
+fetch('/api/health').then(r=>r.json()).then(h=>{
+  const box = document.getElementById('healthBox');
+  if (!box) return;
+  const items = [
+    {key:'imap',     label:'IMAP-Server'},
+    {key:'smtp',     label:'SMTP-Server'},
+    {key:'claude',   label:'Claude-API'},
+    {key:'telegram', label:'Telegram-Bot'},
+  ];
+  box.innerHTML = items.map(it => {
+    const s = h[it.key] || {};
+    const cls = s.ok ? 'health-ok' : (s.ok===false ? 'health-fail' : 'health-unknown');
+    const txt = s.ok ? 'OK' : (s.detail || 'n/a');
+    return `<div class="text-muted-sm mb-2"><span class="health-dot ${cls}"></span>${it.label}: <b style="color:rgba(255,255,255,0.7)">${txt}</b></div>`;
+  }).join('');
+  if (h.last_check) box.innerHTML += `<div class="text-muted-sm mt-2" style="font-size:.75rem;">Letzte Prüfung: ${h.last_check}</div>`;
+});
+</script>
+{% endblock %}
