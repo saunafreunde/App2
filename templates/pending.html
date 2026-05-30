@@ -80,6 +80,7 @@
           </div>
         </div>
         <div class="d-flex gap-2 flex-shrink-0">
+          {% if e.sentiment == 'negativ' %}<span class="badge bg-danger">😠 Verärgert</span>{% endif %}
           <span class="badge bg-{{ cat_colors.get(e.category or '', 'secondary') }}">{{ e.category or '–' }}</span>
           <span class="badge bg-light">{{ ((e.confidence or 0)*100)|int }}%</span>
         </div>

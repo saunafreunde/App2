@@ -217,7 +217,9 @@ def _build_system_prompt(sender_context: list[dict] = None,
 {knowledge_block}DEINE AUFGABE:
 1. Kategorisiere: ANFRAGE | BESCHWERDE | BESTELLUNG | SUPPORT | ALLGEMEIN
 2. Suche passende Vorlagen (search_knowledge)
-3. Verfasse eine menschliche, empathische Antwort auf Deutsch
+3. Verfasse eine menschliche, empathische Antwort IN DER SPRACHE DES KUNDEN
+   (erkenne sie aus der eingehenden Mail – schreibt der Kunde Englisch, antworte
+   auf Englisch; Französisch → Französisch usw.; sonst Deutsch)
 4. Vergib Vertrauensscore (0.0–1.0):
    - >= {threshold}: senden  → send_email_reply()
    - 0.5–{threshold-0.01:.2f}: Entwurf  → mark_for_review()
@@ -575,6 +577,20 @@ def _is_sensitive_email(email_data: dict) -> bool:
     return any(kw in text for kw in _SENSITIVE_KEYWORDS)
 
 
+_NEGATIVE_KEYWORDS = [
+    "unzufrieden", "enttäuscht", "enttaeuscht", "verärgert", "veraergert", "ärgerlich",
+    "beschwerde", "reklamation", "mangelhaft", "frechheit", "unverschämt", "unverschaemt",
+    "katastrophe", "inakzeptabel", "wütend", "wuetend", "sauer", "skandal", "abzocke",
+    "nie wieder", "unmöglich", "unmoeglich", "schlechter service", "eine frechheit",
+]
+
+
+def _detect_sentiment(email_data: dict) -> str:
+    """Grobe Stimmung: 'negativ' (verärgert) oder 'neutral' – für die Priorisierung."""
+    text = ((email_data.get("subject") or "") + " " + (email_data.get("body") or "")).lower()
+    return "negativ" if any(kw in text for kw in _NEGATIVE_KEYWORDS) else "neutral"
+
+
 def _pick_model(email_data: dict) -> str:
     """Sonnet für heikle Fälle, wenn der Schalter (Integrationen) an ist – sonst Haiku."""
     default = _config["claude"].get("model", "claude-haiku-4-5-20251001")
@@ -733,6 +749,11 @@ def process_all_emails():
                                 m["body"], m["received_at"], acc_email)
             if eid > 0:
                 saved += 1
+                # Stimmung erkennen (verärgerte Kunden landen in der Prüfliste oben)
+                try:
+                    db.update_email(eid, sentiment=_detect_sentiment(m))
+                except Exception:
+                    pass
                 # Bild-/PDF-Anhänge für Claude Vision speichern
                 for att in m.get("attachments", []):
                     try:
@@ -1019,7 +1040,7 @@ WICHTIGER HINWEIS VOM BENUTZER:
 {hint}
 
 Schreibe eine neue, verbesserte Antwort unter Berücksichtigung des Hinweises.
-Antworte auf Deutsch, schreibe wie ein echter Mensch (kein Formular-Deutsch).
+Antworte in der Sprache des Kunden (sonst Deutsch), wie ein echter Mensch.
 Keine Grußformel/Signatur am Ende – wird automatisch ergänzt.
 Gib NUR den Antworttext zurück, ohne Einleitung oder Erklärung."""
 

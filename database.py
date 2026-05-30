@@ -62,6 +62,12 @@ def init_db():
         conn.commit()
     except Exception:
         pass
+    # Migration: sentiment (neutral/negativ) – verärgerte Kunden nach oben sortieren
+    try:
+        c.execute("ALTER TABLE emails ADD COLUMN sentiment TEXT")
+        conn.commit()
+    except Exception:
+        pass
 
     # Versprechen / Verbindlichkeiten ("ich melde mich morgen", "Feedback bis Freitag")
     c.execute("""
@@ -233,8 +239,9 @@ def get_pending_review_emails() -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT id, from_address, subject, received_at, "
-            "draft_reply, confidence, notes, category "
-            "FROM emails WHERE status='pending_review' ORDER BY received_at ASC"
+            "draft_reply, confidence, notes, category, sentiment "
+            "FROM emails WHERE status='pending_review' "
+            "ORDER BY CASE WHEN sentiment='negativ' THEN 0 ELSE 1 END, received_at ASC"
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
