@@ -290,8 +290,10 @@ def _compute_send_at() -> str:
                 continue  # nochmal weiter
             target += timedelta(minutes=random.randint(0, 90))
         elif target.hour < start:
-            target = target.replace(hour=start, minute=random.randint(0, 90),
-                                    second=0, microsecond=0)
+            # minute=0 setzen, dann timedelta addieren: random.randint(0, 90) kann
+            # >59 ergeben, was target.replace(minute=...) mit ValueError quittiert.
+            target = target.replace(hour=start, minute=0, second=0, microsecond=0)
+            target += timedelta(minutes=random.randint(0, 90))
     return target.isoformat()
 
 
