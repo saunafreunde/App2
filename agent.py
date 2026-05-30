@@ -638,6 +638,14 @@ def _fetch_with_retry(ec: EmailClient, max_retries: int = 3) -> list[dict]:
     return []
 
 
+def _telegram_mode() -> str:
+    """Telegram-Lautstärke: 'all' (pro Mail) · 'digest' (Sammel) · 'off'. Default: digest."""
+    try:
+        return db.get_setting("telegram_mode", "digest") or "digest"
+    except Exception:
+        return "digest"
+
+
 def process_all_emails():
     global _email_client
     sep = "=" * 52
@@ -729,8 +737,8 @@ def process_all_emails():
                                         status="pending_review",
                                         notes="Dringend – manuelle Prüfung erforderlich")
                     updated2 = db.get_email_by_id(mail["id"])
-                    # Pending-Alert mit Mapping für /ok{id}-Befehl
-                    if updated2 and updated2.get("status") == "pending_review":
+                    # Pending-Alert nur im Modus "all" (Dringend-Alert oben reicht sonst)
+                    if updated2 and updated2.get("status") == "pending_review" and _telegram_mode() == "all":
                         try:
                             import telegram_notify as tg
                             msg_id = tg.send_pending_alert(updated2)
@@ -771,8 +779,8 @@ def process_all_emails():
                 conf    = updated.get("confidence") if updated else None
                 conf_s  = f"  ({conf:.0%})" if conf is not None else ""
 
-                # Telegram-Benachrichtigung bei pending_review
-                if status == "pending_review":
+                # Telegram-Benachrichtigung bei pending_review (nur im Modus "all")
+                if status == "pending_review" and _telegram_mode() == "all":
                     try:
                         import telegram_notify as tg
                         msg_id = tg.send_pending_alert(updated)
@@ -792,6 +800,22 @@ def process_all_emails():
         if urgent_count:   summary.append(f"{urgent_count} dringend")
         if summary:
             print(f"\n    → {' | '.join(summary)}")
+
+    # ── Telegram-Digest: ein Sammel-Hinweis, nur wenn neue Prüf-Mails dazukamen ─
+    if _telegram_mode() == "digest":
+        try:
+            cur  = len(db.get_pending_review_emails())
+            last = int(db.get_setting("_tg_last_pending", "0") or 0)
+            if cur > last:
+                import telegram_notify as tg
+                tg.send_alert(
+                    f"📋 {cur - last} neue E-Mail(s) zur Prüfung (gesamt {cur} offen)",
+                    "Im Web-UI prüfen: https://email.levando.gmbh/pending",
+                    level="info"
+                )
+            db.set_setting("_tg_last_pending", str(cur))
+        except Exception:
+            pass
 
     print(f"\n{sep}")
 

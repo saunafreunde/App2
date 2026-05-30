@@ -57,6 +57,18 @@
         <label class="form-check-label" for="{{ t.key }}">{{ t.label }}</label>
       </div>
       {% endfor %}
+      <hr style="border-color:rgba(255,255,255,0.08);">
+      <label class="form-label text-muted-sm">
+        <i class="bi bi-telegram me-1"></i>Telegram-Benachrichtigungen
+      </label>
+      <select name="telegram_mode" class="form-select" style="max-width:420px;">
+        <option value="digest" {% if telegram_mode=='digest' %}selected{% endif %}>Sammel-Hinweis (empfohlen) — eine Meldung bei neuen Prüf-Mails</option>
+        <option value="all" {% if telegram_mode=='all' %}selected{% endif %}>Jede Mail einzeln (laut)</option>
+        <option value="off" {% if telegram_mode=='off' %}selected{% endif %}>Aus — keine Prüf-Hinweise</option>
+      </select>
+      <div class="text-muted-sm mt-1" style="font-size:.75rem;">
+        Dringende Mails (Mahnung/Anwalt) und Fehler kommen immer durch.
+      </div>
     </div>
   </div>
 

@@ -716,6 +716,7 @@ def integrationen_view():
         pending_count=_pending_count(),
         sections=sections,
         toggles=toggles,
+        telegram_mode=saved.get("telegram_mode", "digest"),
     )
 
 
@@ -732,6 +733,7 @@ def integrationen_save():
                 db.set_setting(f["key"], val.strip(), is_secret=0)
     for t in FEATURE_TOGGLES:
         db.set_setting(t["key"], "1" if request.form.get(t["key"]) else "0", is_secret=0)
+    db.set_setting("telegram_mode", request.form.get("telegram_mode", "digest"), is_secret=0)
     flash("✓ Einstellungen gespeichert.", "success")
     return redirect(url_for("integrationen_view"))
 
