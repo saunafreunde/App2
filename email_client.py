@@ -6,6 +6,7 @@ import html
 import re
 import ssl
 import os
+import base64
 from email.header import decode_header
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -127,6 +128,41 @@ def get_email_body(msg: email.message.Message, max_chars: int = 2000) -> str:
     return body[:max_chars]
 
 
+# ── Anhänge für Claude Vision (Bilder + PDF) ──────────────────────────────────
+
+_VISION_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+_VISION_DOC_TYPES   = {"application/pdf"}
+_MAX_ATTACH_BYTES   = 5 * 1024 * 1024   # 5 MB pro Anhang
+_MAX_ATTACHMENTS    = 5
+
+
+def extract_attachments(msg: email.message.Message) -> list[dict]:
+    """Holt Bild-/PDF-Anhänge (für Claude Vision). Begrenzt Anzahl + Größe.
+    Liefert [{filename, content_type, data (base64), size}]."""
+    out = []
+    if not msg.is_multipart():
+        return out
+    for part in msg.walk():
+        if len(out) >= _MAX_ATTACHMENTS:
+            break
+        ct = (part.get_content_type() or "").lower()
+        if ct not in _VISION_IMAGE_TYPES and ct not in _VISION_DOC_TYPES:
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload or len(payload) > _MAX_ATTACH_BYTES:
+            continue
+        fname = decode_str(part.get_filename() or "")
+        if not fname:
+            fname = "anhang." + (ct.split("/")[-1] if "/" in ct else "bin")
+        out.append({
+            "filename":     fname[:200],
+            "content_type": ct,
+            "data":         base64.b64encode(payload).decode("ascii"),
+            "size":         len(payload),
+        })
+    return out
+
+
 # ── EmailClient ───────────────────────────────────────────────────────────────
 
 class EmailClient:
@@ -175,6 +211,7 @@ class EmailClient:
                         "body":        body,
                         "received_at": received_at,
                         "message_id":  message_id,
+                        "attachments": extract_attachments(msg),
                     })
                 except Exception as e:
                     print(f"    Warnung: E-Mail {uid} übersprungen ({e})")

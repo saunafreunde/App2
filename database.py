@@ -172,6 +172,19 @@ def init_db():
         )
     """)
 
+    # E-Mail-Anhänge (Bilder/PDF für Claude Vision, base64)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS email_attachments (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            email_id     INTEGER,
+            filename     TEXT,
+            content_type TEXT,
+            data         TEXT,
+            size         INTEGER,
+            created_at   TEXT    DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("  Datenbank initialisiert.")
@@ -1206,5 +1219,43 @@ def reject_suggestion(sid: int):
     try:
         conn.execute("UPDATE knowledge_suggestions SET status='rejected' WHERE id=?", (sid,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ── E-Mail-Anhänge (Bilder/PDF für Claude Vision) ─────────────────────────────
+
+def save_attachment(email_id: int, filename: str, content_type: str,
+                    data: str, size: int):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO email_attachments (email_id, filename, content_type, data, size, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (email_id, filename, content_type, data, size, datetime.now().isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_attachments(email_id: int) -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT filename, content_type, data, size FROM email_attachments WHERE email_id=?",
+            (email_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def count_attachments(email_id: int) -> int:
+    conn = get_conn()
+    try:
+        return conn.execute(
+            "SELECT COUNT(*) AS n FROM email_attachments WHERE email_id=?", (email_id,)
+        ).fetchone()["n"]
     finally:
         conn.close()

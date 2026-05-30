@@ -592,33 +592,68 @@ def process_email(email_data: dict):
     tools = [get_email_details, search_knowledge, send_email_reply,
              mark_for_review, mark_as_manual, save_template]
 
+    # Bild-/PDF-Anhänge laden (Claude Vision)
+    try:
+        attachments = db.get_attachments(email_data["id"])
+    except Exception:
+        attachments = []
+    att_note = ""
+    if attachments:
+        namen = ", ".join(a.get("filename", "?") for a in attachments)
+        att_note = (f"\n\nACHTUNG: Der Kunde hat {len(attachments)} Anhang/Anhänge "
+                    f"geschickt ({namen}) – sieh sie dir an und beziehe sie in deine "
+                    f"Antwort ein (z. B. Schadensfoto, Rechnung).")
+
     user_msg = (
         f"Bitte verarbeite diese E-Mail:\n\n"
         f"ID: {email_data['id']}\n"
         f"Von: {email_data['from_address']}\n"
         f"Betreff: {email_data['subject']}\n"
         f"Empfangen: {email_data['received_at']}\n\n"
-        f"Inhalt:\n{email_data['body']}\n\n"
+        f"Inhalt:\n{email_data['body']}{att_note}\n\n"
         f"Vorgehen:\n"
         f"1. search_knowledge() aufrufen\n"
         f"2. Professionelle Antwort verfassen (OHNE Signatur)\n"
         f"3. Senden oder markieren je nach Konfidenz"
     )
 
-    runner = _client.beta.messages.tool_runner(
-        model=_pick_model(email_data),
-        max_tokens=1024,
-        system=[{
-            "type": "text",
-            "text": _build_system_prompt(sender_ctx, category_hint=None),
-            "cache_control": {"type": "ephemeral"},
-        }],
-        tools=tools,
-        messages=[{"role": "user", "content": user_msg}],
-        betas=["prompt-caching-2024-07-31"],
-    )
-    for _ in runner:
-        pass
+    # Message-Content: Text + ggf. Bild-/PDF-Blöcke (Vision)
+    content = [{"type": "text", "text": user_msg}] if attachments else user_msg
+    for a in attachments:
+        ct, data = (a.get("content_type") or "").lower(), (a.get("data") or "")
+        if not data:
+            continue
+        if ct == "application/pdf":
+            content.append({"type": "document",
+                            "source": {"type": "base64", "media_type": "application/pdf", "data": data}})
+        else:
+            content.append({"type": "image",
+                            "source": {"type": "base64", "media_type": ct, "data": data}})
+
+    def _run(msg_content):
+        runner = _client.beta.messages.tool_runner(
+            model=_pick_model(email_data),
+            max_tokens=1024,
+            system=[{
+                "type": "text",
+                "text": _build_system_prompt(sender_ctx, category_hint=None),
+                "cache_control": {"type": "ephemeral"},
+            }],
+            tools=tools,
+            messages=[{"role": "user", "content": msg_content}],
+            betas=["prompt-caching-2024-07-31"],
+        )
+        for _ in runner:
+            pass
+
+    try:
+        _run(content)
+    except Exception as e:
+        if attachments:
+            print(f"    Vision fehlgeschlagen ({e}) – Fallback ohne Anhänge")
+            _run(user_msg)
+        else:
+            raise
 
 
 # ── Alle E-Mails verarbeiten (mit Watchdog) ───────────────────────────────────
@@ -698,6 +733,13 @@ def process_all_emails():
                                 m["body"], m["received_at"], acc_email)
             if eid > 0:
                 saved += 1
+                # Bild-/PDF-Anhänge für Claude Vision speichern
+                for att in m.get("attachments", []):
+                    try:
+                        db.save_attachment(eid, att["filename"], att["content_type"],
+                                           att["data"], att["size"])
+                    except Exception as e:
+                        print(f"    Anhang nicht gespeichert: {e}")
         if saved:
             print(f"    {saved} gespeichert")
 
