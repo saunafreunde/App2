@@ -150,12 +150,6 @@ html, body {
   border-color: rgba(234,179,8,0.3) !important;
 }
 
-.badge-nav-danger {
-  background: rgba(239,68,68,0.2) !important;
-  color: #f87171 !important;
-  border-color: rgba(239,68,68,0.3) !important;
-}
-
 .sidebar .nav-section {
   color: var(--text-subtle);
   font-size: .68rem;

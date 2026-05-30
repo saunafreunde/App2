@@ -86,14 +86,12 @@ def _pending_count() -> int:
 def _inject_counts():
     """Globale Sidebar-Counts in jedem Template verfügbar."""
     try:
-        error_count = len(db.get_emails_by_status("error", limit=500))
         return {
             "aufgaben_count":  db.get_commitments_count().get("open", 0),
             "scheduled_count": len(db.get_scheduled_emails()),
-            "error_count":     error_count,
         }
     except Exception:
-        return {"aufgaben_count": 0, "scheduled_count": 0, "error_count": 0}
+        return {"aufgaben_count": 0, "scheduled_count": 0}
 
 
 def _all_account_emails() -> list:
@@ -147,21 +145,17 @@ def dashboard():
     accounts = cfg.get("accounts") or [cfg.get("email", {})]
     accounts_str = "  ·  ".join(a["email"] for a in accounts)
     pending = db.get_pending_review_emails()
-    stats = db.get_daily_stats()
     return render_template(
         "dashboard.html",
         active="dashboard",
         pending_count=len(pending),
         pending=pending,
-        stats=stats,
+        stats=db.get_daily_stats(),
         date=datetime.now().strftime("%d.%m.%Y"),
         accounts_str=accounts_str,
         top_rejections=db.get_top_rejection_reasons(5),
         top_senders=db.get_top_senders(5),
         accuracy=db.get_category_accuracy(),
-        pending_unprocessed=stats.get("pending_unprocessed") or 0,
-        error_count_today=stats.get("errors") or 0,
-        scheduled_today=stats.get("scheduled") or 0,
     )
 
 
@@ -170,16 +164,35 @@ def dashboard():
 @app.route("/pending")
 def pending_view():
     filter_account = request.args.get("account", "").strip()
-    pending = db.get_pending_review_emails()
+    filter_status  = request.args.get("status", "pending_review").strip()
+
+    if filter_status == "manual":
+        pending = db.get_emails_by_status("manual")
+        for p in pending:
+            p.setdefault("draft_reply", "")
+            p.setdefault("confidence", 0)
+            p.setdefault("category", "")
+            p.setdefault("notes", "")
+    else:
+        filter_status = "pending_review"
+        pending = db.get_pending_review_emails()
+        for p in pending:
+            p["account_email"] = db.get_account_email_for_id(p["id"]) or p.get("account_email", "")
+
     if filter_account:
         pending = [p for p in pending if (p.get("account_email") or "") == filter_account]
+
+    manual_count = len(db.get_emails_by_status("manual"))
+
     return render_template(
         "pending.html",
         active="pending",
-        pending_count=len(pending),
+        pending_count=len(db.get_pending_review_emails()),
         pending=pending,
         accounts=_all_account_emails(),
         filter_account=filter_account,
+        filter_status=filter_status,
+        manual_count=manual_count,
     )
 
 
@@ -455,17 +468,13 @@ def sent_view():
 
 @app.route("/manual")
 def manual_view():
-    return redirect(url_for("pending_view"))
-
-
-@app.route("/done/<int:email_id>", methods=["POST"])
-def mark_done(email_id: int):
-    note = request.form.get("note", "Im Portal erledigt")
-    db.update_email(email_id, status="filtered",
-                    notes=note, processed_at=datetime.now().isoformat())
-    db.log_activity("done", email_id, note)
-    flash(f"✓ E-Mail #{email_id} als erledigt markiert.", "success")
-    return redirect(request.referrer or url_for("pending_view"))
+    return _list_view("manual",
+        active="manual",
+        title="Manuelle Bearbeitung",
+        subtitle="Portale & E-Mails mit niedriger Konfidenz",
+        empty_text="Keine E-Mails zur manuellen Bearbeitung",
+        icon="person-lines-fill",
+        show_category=True, show_notes=True)
 
 
 @app.route("/filtered")
@@ -487,17 +496,6 @@ def rejected_view():
         subtitle="Entwürfe die du abgelehnt hast – mit Begründungen",
         empty_text="Noch keine abgelehnten E-Mails",
         icon="x-octagon",
-        show_category=True, show_notes=True)
-
-
-@app.route("/error")
-def error_view():
-    return _list_view("error",
-        active="error",
-        title="Fehler",
-        subtitle="E-Mails die nicht verarbeitet werden konnten – hier neu verarbeiten lassen",
-        empty_text="Keine fehlgeschlagenen E-Mails",
-        icon="exclamation-triangle",
         show_category=True, show_notes=True)
 
 

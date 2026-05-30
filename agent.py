@@ -70,18 +70,6 @@ _ADS_SUBJECT_KEYWORDS = [
     "business deal", "neue angebote", "upgrade your", "try for free",
 ]
 
-_PHISHING_PATTERNS = [
-    "konto gesperrt", "account suspended", "account blocked",
-    "verifizieren sie", "verify your account", "passwort zurücksetzen",
-    "zahlungsinformationen aktualisieren", "kreditkarte ablaufen",
-    "dringend: ihr konto", "important: your account",
-    "bitcoin", "kryptowährung", "cryptocurrency",
-    "sie haben gewonnen", "you have won", "lottery winner",
-    "erbschaft", "inheritance", "million dollar",
-    "paypal-konto gesperrt",
-    "sofort klicken", "click here immediately", "click here to verify",
-]
-
 _PORTAL_SENDERS = {
     "kleinanzeigen.de":      "Kleinanzeigen",
     "ebay-kleinanzeigen.de": "Kleinanzeigen",
@@ -146,11 +134,6 @@ def pre_filter(email_data: dict) -> str | None:
     for kw in _ADS_SUBJECT_KEYWORDS:
         if kw in subject:
             return "filtered"
-
-    # 3b. Phishing/Scam
-    for kw in _PHISHING_PATTERNS:
-        if kw in subject or kw in body[:500]:
-            return "phishing"
 
     # 4. Portal-Absender
     for pattern, portal_name in _PORTAL_SENDERS.items():
@@ -226,7 +209,7 @@ DEINE AUFGABE:
 4. Vergib Vertrauensscore (0.0–1.0):
    - >= {threshold}: senden  → send_email_reply()
    - 0.5–{threshold-0.01:.2f}: Entwurf  → mark_for_review()
-   - < 0.5: Entwurf (kein Auto-Versand)  → mark_for_review()
+   - < 0.5: manuell  → mark_as_manual()
 
 KONVERSATIONS-STIL (sehr wichtig!):
 - Antworte WIE EIN MENSCH – kurze, persönliche Sätze, kein Formular-Deutsch
@@ -529,19 +512,18 @@ def mark_for_review(email_id: int, draft_reply: str, subject: str,
 
 @beta_tool
 def mark_as_manual(email_id: int, category: str, reason: str) -> str:
-    """Fallback für sehr niedrige Konfidenz – leitet zu mark_for_review weiter.
+    """Manuelle Bearbeitung markieren (Konfidenz < 0.5).
 
     Args:
         email_id: ID.
         category: Erkannte Kategorie.
         reason:   Begründung.
     """
-    return mark_for_review(
-        email_id, draft_reply="",
-        subject="", confidence=0.0,
-        category=category,
-        notes=f"Niedrige Konfidenz – bitte manuell verfassen: {reason}",
-    )
+    db.update_email(email_id, status="manual", category=category,
+                    confidence=0.0, notes=reason,
+                    processed_at=datetime.now().isoformat())
+    db.log_activity("manual", email_id, reason)
+    return f"E-Mail {email_id} zur manuellen Bearbeitung markiert."
 
 
 @beta_tool
@@ -721,15 +703,6 @@ def process_all_emails():
                     print(f"         ✗ FEHLER: {e}")
                 continue
 
-            if filter_result == "phishing":
-                db.update_email(mail["id"], status="filtered", category="PHISHING",
-                                confidence=0.0, notes="Phishing/Scam erkannt",
-                                processed_at=datetime.now().isoformat())
-                db.log_activity("filtered", mail["id"], "Phishing/Scam")
-                print("         🎣 Phishing gefiltert")
-                filtered_count += 1
-                continue
-
             if filter_result == "filtered":
                 db.update_email(mail["id"], status="filtered", category="WERBUNG",
                                 confidence=0.0, notes="Newsletter/Werbung",
@@ -741,12 +714,12 @@ def process_all_emails():
 
             if filter_result and filter_result.startswith("portal:"):
                 portal_name = filter_result.split(":", 1)[1]
-                db.update_email(mail["id"], status="pending_review", category="PORTAL",
+                db.update_email(mail["id"], status="manual", category="PORTAL",
                                 confidence=0.0,
                                 notes=f"Antwort nur im {portal_name}-Portal möglich",
                                 processed_at=datetime.now().isoformat())
                 db.log_activity("portal", mail["id"], portal_name)
-                print(f"         ⚑ Portal: {portal_name} (→ Zur Prüfung)")
+                print(f"         ⚑ Portal: {portal_name}")
                 portal_count += 1
                 continue
 
@@ -797,7 +770,7 @@ def generate_daily_report() -> str:
         f"  Gesamt empfangen:          {stats.get('total', 0) or 0:>4}",
         f"  Automatisch beantwortet:   {stats.get('auto_sent', 0) or 0:>4}",
         f"  Warten auf Überprüfung:    {stats.get('pending_review', 0) or 0:>4}",
-        f"  Geplant (verzögerter Versand): {stats.get('scheduled', 0) or 0:>4}",
+        f"  Manuelle Bearbeitung:      {stats.get('manual', 0) or 0:>4}",
         f"  Gefiltert (Werbung):       {stats.get('filtered', 0) or 0:>4}",
         f"  Abgelehnt:                 {stats.get('rejected', 0) or 0:>4}",
         f"  Fehler:                    {stats.get('errors', 0) or 0:>4}",
@@ -829,8 +802,8 @@ def approve_email(email_id: int, edited_body: str = None, send_now: bool = False
     """Genehmigt Entwurf. Standardmäßig mit Verzögerung (1-3h).
     send_now=True für sofortigen Versand (z.B. urgent)."""
     row = db.get_email_by_id(email_id)
-    if not row or row.get("status") not in ("pending_review", "scheduled", "manual"):
-        print(f"E-Mail {email_id} nicht zur Genehmigung verfügbar (Status: {row.get('status') if row else 'nicht gefunden'}).")
+    if not row or row.get("status") not in ("pending_review", "scheduled"):
+        print(f"E-Mail {email_id} nicht zur Genehmigung verfügbar.")
         return
 
     draft   = edited_body or row.get("draft_reply") or ""
@@ -948,10 +921,7 @@ Gib NUR den Antworttext zurück, ohne Einleitung oder Erklärung."""
         max_tokens=1500,
         messages=[{"role": "user", "content": prompt}]
     )
-    new_body = response.content[0].text.strip()
-    orig_subject = row.get("subject") or ""
-    reply_subject = orig_subject if orig_subject.startswith("Re:") else f"Re: {orig_subject}"
-    new_draft = f"BETREFF: {reply_subject}\n\n{new_body}"
+    new_draft = response.content[0].text.strip()
 
     db.update_email(email_id,
                     draft_reply=new_draft,

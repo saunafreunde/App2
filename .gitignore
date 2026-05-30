@@ -2,6 +2,8 @@
 .env
 config.json
 .hostinger_token
+github_upload.ps1
+hostinger_deploy.ps1
 
 # Daten & Logs
 data/
