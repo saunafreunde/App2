@@ -137,9 +137,23 @@ def init_db():
         )
     """)
 
+    # Wissensbasis – Firmenfakten (Versand, Rückgabe, FAQ), fließt in Claudes System-Prompt
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS knowledge_base (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic      TEXT,
+            content    TEXT,
+            shop       TEXT    DEFAULT 'beide',
+            active     INTEGER DEFAULT 1,
+            sort_order INTEGER DEFAULT 0,
+            created_at TEXT    DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("  Datenbank initialisiert.")
+    _seed_knowledge_if_empty()
 
 
 # ── Emails ──────────────────────────────────────────────────────────────────
@@ -931,5 +945,121 @@ def delete_backup(backup_id: int):
     try:
         conn.execute("DELETE FROM db_backups WHERE id=?", (backup_id,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+# ── Wissensbasis (Firmenfakten für Claudes System-Prompt) ─────────────────────
+
+def get_knowledge(active_only: bool = True) -> list[dict]:
+    conn = get_conn()
+    try:
+        sql = ("SELECT id, topic, content, shop, active, sort_order "
+               "FROM knowledge_base")
+        if active_only:
+            sql += " WHERE active=1"
+        sql += " ORDER BY sort_order ASC, id ASC"
+        return [dict(r) for r in conn.execute(sql).fetchall()]
+    finally:
+        conn.close()
+
+
+def get_knowledge_by_id(kid: int) -> dict | None:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM knowledge_base WHERE id=?", (kid,)
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def save_knowledge(topic: str, content: str, shop: str = "beide",
+                   sort_order: int = 0) -> int:
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO knowledge_base (topic, content, shop, sort_order, created_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (topic, content, shop or "beide", sort_order, datetime.now().isoformat())
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def update_knowledge(kid: int, topic: str, content: str, shop: str,
+                     active: int, sort_order: int):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE knowledge_base SET topic=?, content=?, shop=?, active=?, "
+            "sort_order=? WHERE id=?",
+            (topic, content, shop or "beide", 1 if active else 0, sort_order, kid)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_knowledge(kid: int):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM knowledge_base WHERE id=?", (kid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_knowledge_for_prompt() -> str:
+    """Formatiert die aktive Wissensbasis als Textblock für den System-Prompt."""
+    rows = get_knowledge(active_only=True)
+    if not rows:
+        return ""
+    lines = []
+    for r in rows:
+        shop = (r.get("shop") or "beide").strip()
+        scope = "" if shop in ("", "beide") else f" ({shop})"
+        lines.append(f"  • {r.get('topic','')}{scope}: {r.get('content','')}")
+    return "\n".join(lines)
+
+
+_KNOWLEDGE_SEEDS = [
+    ("Versandzeit", "Die Lieferung dauert in der Regel 2–3 Werktage.", "beide", 10),
+    ("Versandkosten", "Versandkosten betragen 4,90 €. Ab 30 € Bestellwert ist der "
+     "Versand kostenlos.", "beide", 20),
+    ("Rückgabe / Widerruf", "Im eigenen Shop (radschrauben123.de & aromen123.de) gilt "
+     "ein 14-tägiges Widerrufsrecht. Bei Bestellungen über eBay oder Amazon beträgt "
+     "das Rückgaberecht 30 Tage.", "beide", 30),
+    ("\"Wo ist mein Paket?\"", "Wenn jemand fragt, wo sein Paket bleibt: zusichern, "
+     "dass du den Sendungsverlauf prüfst und dich zeitnah mit dem aktuellen Stand "
+     "meldest.", "beide", 40),
+]
+
+
+def _seed_knowledge_if_empty():
+    """Befüllt die Wissensbasis beim ersten Start mit den Standardfakten.
+    Atomar (BEGIN IMMEDIATE), damit die zwei Container nicht doppelt seeden."""
+    conn = get_conn()
+    try:
+        conn.isolation_level = None  # Transaktion selbst steuern
+        conn.execute("BEGIN IMMEDIATE")
+        n = conn.execute("SELECT COUNT(*) AS n FROM knowledge_base").fetchone()["n"]
+        if n == 0:
+            conn.executemany(
+                "INSERT INTO knowledge_base (topic, content, shop, sort_order, created_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                [(t, c, s, o, datetime.now().isoformat()) for t, c, s, o in _KNOWLEDGE_SEEDS]
+            )
+            print(f"  Wissensbasis mit {len(_KNOWLEDGE_SEEDS)} Standardeinträgen befüllt.")
+        conn.execute("COMMIT")
+    except Exception as e:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        print(f"  Wissensbasis-Seed übersprungen ({e})")
     finally:
         conn.close()

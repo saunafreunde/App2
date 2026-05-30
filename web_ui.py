@@ -576,6 +576,60 @@ def template_delete(template_id: int):
     return redirect(url_for("templates_list"))
 
 
+# ── Wissensbasis (Firmenfakten für Claude) ───────────────────────────────────
+
+def _parse_sort(val: str) -> int:
+    try:
+        return int(val or 0)
+    except (ValueError, TypeError):
+        return 0
+
+
+@app.route("/knowledge")
+def knowledge_list():
+    return render_template(
+        "knowledge.html",
+        active="knowledge",
+        pending_count=_pending_count(),
+        entries=db.get_knowledge(active_only=False),
+    )
+
+
+@app.route("/knowledge/new", methods=["POST"])
+def knowledge_new():
+    topic   = request.form.get("topic", "").strip()
+    content = request.form.get("content", "").strip()
+    shop    = request.form.get("shop", "beide").strip() or "beide"
+    if topic and content:
+        db.save_knowledge(topic, content, shop, _parse_sort(request.form.get("sort_order")))
+        flash(f"✓ Wissens-Eintrag „{topic}“ angelegt.", "success")
+    else:
+        flash("Bitte Thema und Inhalt ausfüllen.", "warning")
+    return redirect(url_for("knowledge_list"))
+
+
+@app.route("/knowledge/<int:kid>/edit", methods=["POST"])
+def knowledge_edit(kid: int):
+    topic   = request.form.get("topic", "").strip()
+    content = request.form.get("content", "").strip()
+    shop    = request.form.get("shop", "beide").strip() or "beide"
+    active  = 1 if request.form.get("active") else 0
+    if topic and content:
+        db.update_knowledge(kid, topic, content, shop, active,
+                            _parse_sort(request.form.get("sort_order")))
+        flash(f"✓ „{topic}“ gespeichert.", "success")
+    else:
+        flash("Bitte Thema und Inhalt ausfüllen.", "warning")
+    return redirect(url_for("knowledge_list"))
+
+
+@app.route("/knowledge/<int:kid>/delete", methods=["POST"])
+def knowledge_delete(kid: int):
+    db.delete_knowledge(kid)
+    flash("Wissens-Eintrag gelöscht.", "warning")
+    return redirect(url_for("knowledge_list"))
+
+
 # ── Aufgaben / Versprechen ───────────────────────────────────────────────────
 
 @app.route("/aufgaben")

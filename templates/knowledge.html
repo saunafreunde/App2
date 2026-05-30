@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Wissensbasis – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <div class="page-header">Wissensbasis</div>
+    <div class="text-muted-sm mt-1">
+      {{ entries|length }} Eintrag/Einträge — Claude nutzt diese Fakten verbindlich in jeder Antwort
+    </div>
+  </div>
+</div>
+
+<!-- Neuer Eintrag -->
+<div class="card mb-4">
+  <div class="card-body">
+    <div class="fw-bold mb-3"><i class="bi bi-plus-circle me-2"></i>Neuen Eintrag anlegen</div>
+    <form method="post" action="/knowledge/new">
+      <div class="row g-2">
+        <div class="col-md-5">
+          <label class="form-label text-muted-sm">Thema</label>
+          <input name="topic" class="form-control" placeholder="z. B. Versandzeit" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label text-muted-sm">Gilt für</label>
+          <select name="shop" class="form-select">
+            <option value="beide">Beide Shops</option>
+            <option value="radschrauben123">radschrauben123</option>
+            <option value="aromen123">aromen123</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label text-muted-sm">Reihenfolge</label>
+          <input name="sort_order" type="number" class="form-control" value="0">
+        </div>
+        <div class="col-12">
+          <label class="form-label text-muted-sm">Inhalt / Fakt</label>
+          <textarea name="content" class="form-control" rows="2"
+                    placeholder="z. B. Die Lieferung dauert in der Regel 2–3 Werktage." required></textarea>
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary"><i class="bi bi-plus-lg"></i>Anlegen</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not entries %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-book"></i>
+    <div class="fw-semibold">Noch kein Wissen hinterlegt</div>
+    <div class="text-muted-sm mt-1">Lege Fakten an (Versand, Rückgabe, FAQ), die Claude in Antworten verwendet.</div>
+  </div>
+</div>
+{% else %}
+<div class="row g-3">
+  {% for e in entries %}
+  <div class="col-md-6">
+    <div class="card h-100 {% if not e.active %}opacity-50{% endif %}">
+      <div class="card-body">
+        <form method="post" action="/knowledge/{{ e.id }}/edit">
+          <div class="d-flex justify-content-between align-items-center mb-2 gap-2">
+            <input name="topic" class="form-control fw-bold" value="{{ e.topic }}">
+            <button class="btn btn-outline-primary btn-sm py-1 px-2" title="Speichern">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          </div>
+          <textarea name="content" class="form-control mb-2" rows="3">{{ e.content }}</textarea>
+          <div class="row g-2 align-items-center">
+            <div class="col-6">
+              <select name="shop" class="form-select form-select-sm">
+                <option value="beide" {% if e.shop=='beide' %}selected{% endif %}>Beide Shops</option>
+                <option value="radschrauben123" {% if e.shop=='radschrauben123' %}selected{% endif %}>radschrauben123</option>
+                <option value="aromen123" {% if e.shop=='aromen123' %}selected{% endif %}>aromen123</option>
+              </select>
+            </div>
+            <div class="col-3">
+              <input name="sort_order" type="number" class="form-control form-control-sm"
+                     value="{{ e.sort_order or 0 }}" title="Reihenfolge">
+            </div>
+            <div class="col-3 form-check m-0 ps-4">
+              <input class="form-check-input" type="checkbox" name="active"
+                     id="act{{ e.id }}" {% if e.active %}checked{% endif %}>
+              <label class="form-check-label text-muted-sm" for="act{{ e.id }}">aktiv</label>
+            </div>
+          </div>
+        </form>
+        <form method="post" action="/knowledge/{{ e.id }}/delete" class="mt-2"
+              onsubmit="return confirm('Eintrag wirklich löschen?')">
+          <button class="btn btn-outline-danger btn-sm py-0 px-2"><i class="bi bi-trash"></i> Löschen</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

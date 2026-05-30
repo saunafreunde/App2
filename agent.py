@@ -200,9 +200,21 @@ def _build_system_prompt(sender_context: list[dict] = None,
             )
         feedback_block = "\n".join(lines) + "\n\n"
 
+    # ── Firmenwissen (Versand, Rückgabe, FAQ – immer verbindlich) ─────────────
+    try:
+        kb = db.get_knowledge_for_prompt()
+    except Exception:
+        kb = ""
+    knowledge_block = ""
+    if kb:
+        knowledge_block = (
+            "VERBINDLICHES FIRMENWISSEN – nutze diese Fakten für deine Antworten, "
+            "erfinde nichts Abweichendes:\n" + kb + "\n\n"
+        )
+
     return f"""{context_block}{feedback_block}Du bist der persönliche E-Mail-Assistent von {company} – schreibst aber wie ein echter Mensch, NICHT wie ein Bot.
 
-DEINE AUFGABE:
+{knowledge_block}DEINE AUFGABE:
 1. Kategorisiere: ANFRAGE | BESCHWERDE | BESTELLUNG | SUPPORT | ALLGEMEIN
 2. Suche passende Vorlagen (search_knowledge)
 3. Verfasse eine menschliche, empathische Antwort auf Deutsch
