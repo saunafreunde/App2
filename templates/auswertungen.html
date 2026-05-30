@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Auswertungen – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Auswertungen</div>
+<div class="text-muted-sm mb-4">Kennzahlen, Verlauf &amp; Verteilungen</div>
+
+<!-- KPI-Karten (heute) -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body text-center">
+      <div class="fw-bold" style="font-size:1.8rem;">{{ stats.total or 0 }}</div>
+      <div class="text-muted-sm">Heute gesamt</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body text-center">
+      <div class="fw-bold text-success" style="font-size:1.8rem;">{{ stats.auto_sent or 0 }}</div>
+      <div class="text-muted-sm">Auto-versendet</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body text-center">
+      <div class="fw-bold text-warning" style="font-size:1.8rem;">{{ stats.pending_review or 0 }}</div>
+      <div class="text-muted-sm">Zur Prüfung</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body text-center">
+      <div class="fw-bold" style="font-size:1.8rem;color:#3b82f6;">{{ auto_quote }}%</div>
+      <div class="text-muted-sm">Auto-Versand-Quote</div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- 7-Tage-Verlauf -->
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body">
+      <div class="fw-bold mb-3"><i class="bi bi-bar-chart me-2"></i>7-Tage-Verlauf</div>
+      {% set wmax = (weekly|map(attribute='total')|max) if weekly else 1 %}
+      {% for d in weekly %}
+      <div class="mb-2">
+        <div class="d-flex justify-content-between text-muted-sm" style="font-size:.78rem;">
+          <span>{{ d.date }}</span><span>{{ d.total }} · {{ d.auto_sent }} auto</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:8px;overflow:hidden;">
+          <div style="background:#3b82f6;height:8px;width:{{ (d.total / wmax * 100)|round }}%;"></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-muted-sm">Noch keine Daten.</div>
+      {% endfor %}
+    </div></div>
+  </div>
+
+  <!-- Stimmung -->
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body">
+      <div class="fw-bold mb-3"><i class="bi bi-emoji-frown me-2"></i>Stimmung (30 Tage)</div>
+      {% set stot = (sentiment.negativ + sentiment.neutral) or 1 %}
+      <div class="mb-3">
+        <div class="d-flex justify-content-between text-muted-sm"><span>😠 Verärgert</span><span>{{ sentiment.negativ }}</span></div>
+        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:10px;overflow:hidden;">
+          <div style="background:#ef4444;height:10px;width:{{ (sentiment.negativ / stot * 100)|round }}%;"></div>
+        </div>
+      </div>
+      <div>
+        <div class="d-flex justify-content-between text-muted-sm"><span>🙂 Neutral</span><span>{{ sentiment.neutral }}</span></div>
+        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:10px;overflow:hidden;">
+          <div style="background:#22c55e;height:10px;width:{{ (sentiment.neutral / stot * 100)|round }}%;"></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- Kategorien -->
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body">
+      <div class="fw-bold mb-3"><i class="bi bi-tags me-2"></i>Kategorien (30 Tage)</div>
+      {% set cmax = (categories|map(attribute='n')|max) if categories else 1 %}
+      {% for c in categories %}
+      <div class="mb-2">
+        <div class="d-flex justify-content-between text-muted-sm" style="font-size:.8rem;"><span>{{ c.category }}</span><span>{{ c.n }}</span></div>
+        <div style="background:rgba(255,255,255,0.08);border-radius:4px;height:8px;overflow:hidden;">
+          <div style="background:#8b5cf6;height:8px;width:{{ (c.n / cmax * 100)|round }}%;"></div>
+        </div>
+      </div>
+      {% else %}
+      <div class="text-muted-sm">Noch keine Daten.</div>
+      {% endfor %}
+    </div></div>
+  </div>
+
+  <!-- Wissensbasis -->
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body">
+      <div class="fw-bold mb-3"><i class="bi bi-book me-2"></i>Wissensbasis</div>
+      <div class="d-flex justify-content-between mb-2"><span class="text-muted-sm">Aktive Einträge</span><span class="fw-bold">{{ kb_count }}</span></div>
+      <div class="d-flex justify-content-between"><span class="text-muted-sm">Offene Vorschläge</span><span class="fw-bold text-warning">{{ suggestions_count }}</span></div>
+      <a href="/knowledge" class="btn btn-outline-primary btn-sm mt-3"><i class="bi bi-arrow-right"></i>Zur Wissensbasis</a>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

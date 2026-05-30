@@ -484,6 +484,36 @@ def get_weekly_stats() -> list[dict]:
         conn.close()
 
 
+def get_category_distribution(days: int = 30) -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT COALESCE(NULLIF(category,''),'–') AS category, COUNT(*) AS n "
+            "FROM emails WHERE DATE(received_at) >= DATE('now', ?) "
+            "GROUP BY category ORDER BY n DESC LIMIT 12",
+            (f"-{days} days",)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_sentiment_distribution(days: int = 30) -> dict:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT COALESCE(NULLIF(sentiment,''),'neutral') AS s, COUNT(*) AS n "
+            "FROM emails WHERE DATE(received_at) >= DATE('now', ?) GROUP BY sentiment",
+            (f"-{days} days",)
+        ).fetchall()
+        out = {"negativ": 0, "neutral": 0}
+        for r in rows:
+            out[r["s"]] = r["n"]
+        return out
+    finally:
+        conn.close()
+
+
 # ── Volltext-Suche ────────────────────────────────────────────────────────────
 
 def search_emails(query: str, limit: int = 50) -> list[dict]:

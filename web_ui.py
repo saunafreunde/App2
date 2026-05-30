@@ -693,6 +693,7 @@ INTEGRATION_SECTIONS = [
 FEATURE_TOGGLES = [
     {"key": "feat_strong_model", "label": "Stärkeres Modell (Sonnet) für Beschwerden, Mahnungen & dringende Mails"},
     {"key": "feat_autolearn",    "label": "Wissensbasis lernt automatisch (Vorschläge aus gesendeten Antworten)"},
+    {"key": "feat_factcheck",    "label": "Fakten-Check vor Auto-Versand (blockt Antworten mit erfundenen Fakten)"},
 ]
 
 _SECRET_MASK = "••••••••"
@@ -736,6 +737,27 @@ def integrationen_save():
     db.set_setting("telegram_mode", request.form.get("telegram_mode", "digest"), is_secret=0)
     flash("✓ Einstellungen gespeichert.", "success")
     return redirect(url_for("integrationen_view"))
+
+
+# ── Auswertungen ─────────────────────────────────────────────────────────────
+
+@app.route("/auswertungen")
+def auswertungen_view():
+    stats = db.get_daily_stats()
+    total = stats.get("total", 0) or 0
+    auto  = stats.get("auto_sent", 0) or 0
+    return render_template(
+        "auswertungen.html",
+        active="auswertungen",
+        pending_count=_pending_count(),
+        stats=stats,
+        auto_quote=(round(auto / total * 100) if total else 0),
+        weekly=db.get_weekly_stats(),
+        categories=db.get_category_distribution(30),
+        sentiment=db.get_sentiment_distribution(30),
+        kb_count=len(db.get_knowledge(active_only=False)),
+        suggestions_count=len(db.get_suggestions("pending")),
+    )
 
 
 # ── Aufgaben / Versprechen ───────────────────────────────────────────────────

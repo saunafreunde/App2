@@ -311,6 +311,41 @@ def _compute_send_at() -> str:
     return target.isoformat()
 
 
+def _factcheck_reply(reply_body: str):
+    """Prüft, ob die Antwort konkrete Fakten behauptet, die NICHT durch die
+    Wissensbasis gedeckt sind (Halluzinations-Schutz). Gibt (risky, grund) zurück.
+    Fail-open: bei Fehler oder ohne Wissensbasis wird NICHT blockiert."""
+    try:
+        kb = db.get_knowledge_for_prompt()
+    except Exception:
+        kb = ""
+    if not kb:
+        return (False, "")
+    prompt = (
+        "Du bist ein strenger Faktenprüfer für Kundenservice-Antworten.\n\n"
+        "UNSER GESICHERTES FIRMENWISSEN:\n" + kb + "\n\n"
+        "ZU PRÜFENDE ANTWORT:\n" + reply_body[:1500] + "\n\n"
+        "Behauptet die Antwort KONKRETE Fakten (Versandzeiten, Preise, Versandkosten, "
+        "Rückgabe-Fristen, Verfügbarkeit, Garantien), die dem Firmenwissen WIDERSPRECHEN "
+        "oder klar darüber HINAUSGEHEN (könnten also erfunden sein)? Allgemeine "
+        "Höflichkeit, Zusagen ('ich kümmere mich') und Rückfragen sind KEIN Problem.\n\n"
+        'Antworte NUR als JSON: {"risky": true/false, "reason": "kurz woran"}'
+    )
+    try:
+        resp = _client.messages.create(
+            model=_config["claude"].get("model", "claude-haiku-4-5-20251001"),
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = (resp.content[0].text or "").strip()
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        data = json.loads(m.group(0)) if m else {}
+        return (bool(data.get("risky")), str(data.get("reason", ""))[:200])
+    except Exception as e:
+        print(f"  Fakten-Check fehlgeschlagen: {e}")
+        return (False, "")
+
+
 @beta_tool
 def send_email_reply(email_id: int, to_address: str, subject: str,
                      body: str, confidence: float, category: str) -> str:
@@ -333,6 +368,17 @@ def send_email_reply(email_id: int, to_address: str, subject: str,
     if effective_conf < threshold:
         return (f"Konfidenz {effective_conf:.2f} unter Schwelle {threshold:.2f}. "
                 f"Bitte mark_for_review() verwenden.")
+
+    # Fakten-Check vor Auto-Versand (Halluzinations-Schutz, wenn aktiviert)
+    try:
+        if db.get_setting("feat_factcheck", "0") == "1":
+            risky, reason = _factcheck_reply(body)
+            if risky:
+                return mark_for_review(email_id, body, subject,
+                                       min(effective_conf, 0.5), category,
+                                       notes=f"Fakten-Check: {reason}")
+    except Exception as e:
+        print(f"    Fakten-Check übersprungen: {e}")
 
     # Verzögerten Sendezeitpunkt berechnen (1-3h, ggf. nächster Werktag)
     send_at = _compute_send_at()
