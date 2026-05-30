@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}{{ email.subject or 'E-Mail' }} – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+  <a href="javascript:history.back()" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <div>
+    <div class="page-header mb-0">{{ email.subject or '(kein Betreff)' }}</div>
+    <div class="text-muted-sm">ID {{ email.id }} &nbsp;·&nbsp; {{ (email.received_at or '')[:16] }}</div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Left Column: Meta + Original -->
+  <div class="col-lg-6">
+    <div class="card mb-3">
+      <div class="card-body">
+        {% set s_colors = {'sent':'success','pending_review':'warning','pending':'secondary','manual':'info','filtered':'secondary','rejected':'danger','snoozed':'info','error':'danger'} %}
+        {% set cat_colors = {'ANFRAGE':'primary','BESCHWERDE':'danger','BESTELLUNG':'success','SUPPORT':'info','ALLGEMEIN':'secondary'} %}
+        <table style="width:100%; font-size:.87rem; border-collapse:collapse;">
+          <tr><td style="width:90px;color:var(--text-muted);font-weight:500;padding:5px 0;">Von</td>
+              <td style="color:rgba(255,255,255,0.8);">{{ email.from_address }}</td></tr>
+          <tr><td style="color:var(--text-muted);font-weight:500;padding:5px 0;">Konto</td>
+              <td style="color:rgba(255,255,255,0.8);">{{ email.account_email or '–' }}</td></tr>
+          <tr><td style="color:var(--text-muted);font-weight:500;padding:5px 0;">Status</td>
+              <td><span class="badge bg-{{ s_colors.get(email.status, 'secondary') }}">{{ email.status }}</span></td></tr>
+          <tr><td style="color:var(--text-muted);font-weight:500;padding:5px 0;">Kategorie</td>
+              <td>
+                {% if email.category %}
+                  <span class="badge bg-{{ cat_colors.get(email.category, 'secondary') }}">{{ email.category }}</span>
+                {% else %}–{% endif %}
+              </td></tr>
+          <tr><td style="color:var(--text-muted);font-weight:500;padding:5px 0;">Konfidenz</td>
+              <td>{% if email.confidence is not none %}
+                <div class="d-flex align-items-center gap-2">
+                  <div class="conf-bar" style="width:80px;"><div class="conf-fill bg-{{ 'success' if email.confidence >= 0.75 else 'warning' }} conf-fill" style="width:{{ (email.confidence*100)|int }}%"></div></div>
+                  <span style="font-size:.8rem;color:var(--text-muted);">{{ (email.confidence*100)|int }}%</span>
+                </div>{% else %}–{% endif %}
+              </td></tr>
+          {% if email.notes %}
+          <tr><td style="color:var(--text-muted);font-weight:500;padding:5px 0;vertical-align:top;">Notizen</td>
+              <td style="color:var(--text-muted);font-size:.83rem;">{{ email.notes }}</td></tr>
+          {% endif %}
+          {% if email.snooze_until %}
+          <tr><td style="color:var(--text-muted);font-weight:500;padding:5px 0;">Erinnerung</td>
+              <td style="color:rgba(255,255,255,0.7);">{{ email.snooze_until[:16] }}</td></tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="text-muted-sm fw-semibold" style="text-transform:uppercase;letter-spacing:.5px;font-size:.7rem;">Original E-Mail</span>
+      </div>
+      <div class="card-body">
+        <div class="body-box">{{ email.body or '(kein Inhalt)' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Column: Draft / Reply -->
+  <div class="col-lg-6">
+    {% if email.status == 'pending_review' %}
+    <div class="card mb-3" style="border-left:3px solid rgba(240,128,32,0.5) !important;">
+      <div class="card-header">
+        <span class="text-muted-sm fw-semibold" style="text-transform:uppercase;letter-spacing:.5px;font-size:.7rem;">Claude-Entwurf</span>
+        <span class="text-muted-sm ms-2" style="font-size:.75rem;"><i class="bi bi-pencil me-1"></i>Direkt bearbeitbar</span>
+      </div>
+      <div class="card-body">
+        <form method="post" action="/approve/{{ email.id }}" id="approveForm">
+          <textarea name="edited_draft" id="draftEdit" class="form-control mb-3"
+                    style="min-height:220px; border-left:3px solid rgba(59,130,246,0.4); border-radius:0 8px 8px 0;"
+                    >{{ email.draft_reply or '' }}</textarea>
+          <div class="d-flex gap-2 align-items-center flex-wrap">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#previewModal">
+              <i class="bi bi-eye"></i>Vorschau
+            </button>
+            <button type="submit" name="send_now" value="0" class="btn btn-success">
+              <i class="bi bi-clock-history"></i>Genehmigen (verzögert)
+            </button>
+            <button type="submit" name="send_now" value="1" class="btn btn-warning"
+                    onclick="return confirm('Sofort senden ohne Verzögerung?')">
+              <i class="bi bi-send-fill"></i>Sofort senden
+            </button>
+          </div>
+        </form>
+
+        <div class="mt-3 pt-3 border-top d-flex flex-wrap gap-2">
+          <a href="/reprocess/{{ email.id }}" class="btn btn-outline-warning btn-sm"
+             onclick="return confirm('Erneut von Claude verarbeiten?')">
+            <i class="bi bi-arrow-clockwise"></i>Neu verarbeiten
+          </a>
+          <button type="button" class="btn btn-outline-info btn-sm"
+                  data-snooze-id="{{ email.id }}" data-snooze-subject="{{ email.subject or '' }}">
+            <i class="bi bi-moon"></i>Snooze
+          </button>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+                  data-reject-id="{{ email.id }}" data-reject-subject="{{ email.subject or '' }}">
+            <i class="bi bi-x-lg"></i>Ablehnen
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview Modal -->
+    <div class="modal fade" id="previewModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-eye me-2"></i>Vorschau – So sieht der Empfänger die Mail</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-0" style="background:#f5f6f8;">
+            <div style="padding:12px 18px;background:#fff;border-bottom:1px solid #e9ecef;font-size:.83rem;color:#555;">
+              <div><strong>An:</strong> {{ email.from_address }}</div>
+              <div><strong>Von:</strong> {{ email.account_email or '' }}</div>
+              <div><strong>Betreff:</strong> <span id="previewSubject" style="font-weight:600;color:#1a2035;"></span></div>
+            </div>
+            <iframe id="previewFrame" style="width:100%;min-height:500px;border:0;background:#f5f6f8;"></iframe>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Weiter bearbeiten</button>
+            <button type="button" class="btn btn-success"
+                    onclick="document.querySelector('#approveForm button[name=send_now][value=\'0\']').click();">
+              <i class="bi bi-clock-history me-1"></i>Genehmigen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% elif email.status == 'sent' %}
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-check-circle text-success"></i>
+        <span class="text-muted-sm fw-semibold" style="text-transform:uppercase;letter-spacing:.5px;font-size:.7rem;">Gesendete Antwort</span>
+      </div>
+      <div class="card-body">
+        <div class="body-box">{{ email.sent_reply or email.draft_reply or '–' }}</div>
+      </div>
+    </div>
+
+    {% elif email.status == 'manual' %}
+    <div class="alert alert-info">
+      <i class="bi bi-person-lines-fill me-2"></i>Manuelle Bearbeitung.<br>
+      <span style="font-size:.83rem;">{{ email.notes or '' }}</span>
+    </div>
+    <a href="/reprocess/{{ email.id }}" class="btn btn-outline-warning btn-sm"
+       onclick="return confirm('Erneut von Claude verarbeiten?')">
+      <i class="bi bi-arrow-clockwise"></i>Erneut verarbeiten
+    </a>
+
+    {% elif email.status == 'rejected' %}
+    <div class="alert alert-danger">
+      <i class="bi bi-x-octagon me-2"></i>Abgelehnt.<br>
+      <span style="font-size:.83rem;">{{ email.notes or '' }}</span>
+    </div>
+    {% if email.draft_reply %}
+    <div class="card mt-3">
+      <div class="card-header">
+        <span class="text-muted-sm fw-semibold" style="text-transform:uppercase;letter-spacing:.5px;font-size:.7rem;opacity:.6;">Abgelehnter Entwurf</span>
+      </div>
+      <div class="card-body">
+        <div class="body-box" style="opacity:.5;">{{ email.draft_reply }}</div>
+      </div>
+    </div>
+    {% endif %}
+    <a href="/reprocess/{{ email.id }}" class="btn btn-outline-warning btn-sm mt-3"
+       onclick="return confirm('Erneut versuchen?')">
+      <i class="bi bi-arrow-clockwise"></i>Erneut versuchen
+    </a>
+
+    {% elif email.status == 'snoozed' %}
+    <div class="alert alert-info">
+      <i class="bi bi-moon me-2"></i>Erinnerung um {{ (email.snooze_until or '')[:16] }}
+    </div>
+    <a href="/unsnooze/{{ email.id }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-bell me-1"></i>Jetzt aufwecken
+    </a>
+
+    {% elif email.status == 'filtered' %}
+    <div class="alert alert-secondary">
+      <i class="bi bi-funnel me-2"></i>Als Newsletter/Werbung gefiltert.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const previewModal = document.getElementById('previewModal');
+if (previewModal) {
+  previewModal.addEventListener('show.bs.modal', function() {
+    const draft = document.getElementById('draftEdit').value;
+    let subject = '', body = draft;
+    if (draft.startsWith('BETREFF:')) {
+      const idx = draft.indexOf('\n\n');
+      if (idx > 0) { subject = draft.substring(0, idx).replace('BETREFF:', '').trim(); body = draft.substring(idx+2).trim(); }
+      else { subject = draft.replace('BETREFF:', '').trim(); body = ''; }
+    } else { subject = "Re: {{ (email.subject or '')|e }}"; }
+    document.getElementById('previewSubject').textContent = subject || '(kein Betreff)';
+    fetch('/preview_html', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email_id: {{ email.id }}, body: body})
+    }).then(r => r.text()).then(html => {
+      document.getElementById('previewFrame').srcdoc = html;
+    });
+  });
+}
+</script>
+{% endblock %}

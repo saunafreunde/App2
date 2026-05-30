@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Aufgaben – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Aufgaben & Versprechen</div>
+<div class="text-muted-sm mb-4">
+  {{ groups.overdue|length + groups.today|length + groups.future|length }} offen — was du per E-Mail zugesagt hast
+</div>
+
+{% if groups.overdue %}
+<div class="card mb-3" style="border-left:3px solid #ef4444 !important;">
+  <div class="card-header">
+    <i class="bi bi-exclamation-triangle text-danger me-2"></i>
+    <span class="fw-bold text-danger">Überfällig ({{ groups.overdue|length }})</span>
+  </div>
+  <div class="card-body p-0">
+    {% for c in groups.overdue %}
+    <div class="d-flex justify-content-between align-items-start p-4 border-bottom" style="border-color:rgba(255,255,255,0.06) !important;">
+      <div>
+        <div class="text-muted-sm mb-1">
+          <strong class="text-danger">{{ c.due_str }}</strong> — an
+          <a href="/email/{{ c.email_id }}" class="text-decoration-none" style="color:var(--orange);">{{ c.sender }}</a>
+        </div>
+        <div class="fw-semibold mb-1">{{ c.subject }}</div>
+        <div style="color:rgba(255,255,255,0.55);font-size:.87rem;">"{{ c.promise }}"</div>
+      </div>
+      <form method="post" action="/aufgaben/{{ c.id }}/done" class="ms-3 flex-shrink-0">
+        <button class="btn btn-outline-success btn-sm"><i class="bi bi-check-lg"></i>Erledigt</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if groups.today %}
+<div class="card mb-3" style="border-left:3px solid #f59e0b !important;">
+  <div class="card-header">
+    <i class="bi bi-clock text-warning me-2"></i>
+    <span class="fw-bold text-warning">Heute fällig ({{ groups.today|length }})</span>
+  </div>
+  <div class="card-body p-0">
+    {% for c in groups.today %}
+    <div class="d-flex justify-content-between align-items-start p-4 border-bottom" style="border-color:rgba(255,255,255,0.06) !important;">
+      <div>
+        <div class="text-muted-sm mb-1">
+          <strong style="color:#facc15;">{{ c.due_str }}</strong> — an
+          <a href="/email/{{ c.email_id }}" class="text-decoration-none" style="color:var(--orange);">{{ c.sender }}</a>
+        </div>
+        <div class="fw-semibold mb-1">{{ c.subject }}</div>
+        <div style="color:rgba(255,255,255,0.55);font-size:.87rem;">"{{ c.promise }}"</div>
+      </div>
+      <form method="post" action="/aufgaben/{{ c.id }}/done" class="ms-3 flex-shrink-0">
+        <button class="btn btn-outline-success btn-sm"><i class="bi bi-check-lg"></i>Erledigt</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if groups.future %}
+<div class="card mb-3" style="border-left:3px solid #22c55e !important;">
+  <div class="card-header">
+    <i class="bi bi-calendar text-success me-2"></i>
+    <span class="fw-bold text-success">Nächste Tage ({{ groups.future|length }})</span>
+  </div>
+  <div class="card-body p-0">
+    {% for c in groups.future %}
+    <div class="d-flex justify-content-between align-items-start p-4 border-bottom" style="border-color:rgba(255,255,255,0.06) !important;">
+      <div>
+        <div class="text-muted-sm mb-1">
+          <strong style="color:#4ade80;">{{ c.due_str }}</strong> — an
+          <a href="/email/{{ c.email_id }}" class="text-decoration-none" style="color:var(--orange);">{{ c.sender }}</a>
+        </div>
+        <div class="fw-semibold mb-1">{{ c.subject }}</div>
+        <div style="color:rgba(255,255,255,0.55);font-size:.87rem;">"{{ c.promise }}"</div>
+      </div>
+      <form method="post" action="/aufgaben/{{ c.id }}/done" class="ms-3 flex-shrink-0">
+        <button class="btn btn-outline-success btn-sm"><i class="bi bi-check-lg"></i>Erledigt</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not groups.overdue and not groups.today and not groups.future %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-bookmark-star text-success"></i>
+    <div class="fw-semibold" style="color:#4ade80;">Alle Versprechen erledigt!</div>
+    <div class="text-muted-sm mt-1">Gut gemacht!</div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

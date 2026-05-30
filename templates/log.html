@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Aktivitäten – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Aktivitäten</div>
+<div class="text-muted-sm mb-4">Letzte 100 Aktionen des Agenten</div>
+
+<div class="card">
+  <div class="card-body p-0">
+    {% if not log %}
+    <div class="empty-state">
+      <i class="bi bi-journal"></i>
+      <div>Noch keine Aktivitäten.</div>
+    </div>
+    {% else %}
+    <table class="table mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4" style="width:145px;">Zeitpunkt</th>
+          <th style="width:120px;">Aktion</th>
+          <th style="width:70px;">E-Mail</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in log %}
+        {% set a_colors = {'sent':'success','approved':'success','flagged':'warning','manual':'info','rejected':'danger','send_error':'danger','filtered':'secondary','portal':'warning','reprocess':'primary','snooze':'info','unsnooze':'info'} %}
+        <tr class="log-row">
+          <td class="ps-4 text-muted" style="font-size:.8rem;">{{ (row.timestamp or '')[:16] }}</td>
+          <td>
+            <span class="badge bg-{{ a_colors.get(row.action, 'secondary') }}">{{ row.action }}</span>
+          </td>
+          <td class="text-muted" style="font-size:.82rem;">
+            {% if row.email_id %}
+              <a href="/email/{{ row.email_id }}" class="text-decoration-none" style="color:var(--orange);">{{ row.email_id }}</a>
+            {% else %}–{% endif %}
+          </td>
+          <td class="text-muted" style="font-size:.82rem;">{{ (row.details or '')[:100] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

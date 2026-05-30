@@ -10,8 +10,14 @@ DB_PATH = Path(__file__).parent / "data" / "email_agent.db"
 
 def get_conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES)
+    # timeout=30: bis zu 30s auf einen Lock warten statt sofort "database is locked".
+    # Agent-Daemon + Web-UI teilen sich dieselbe DB-Datei (Docker-Volume).
+    conn = sqlite3.connect(DB_PATH, detect_types=sqlite3.PARSE_DECLTYPES, timeout=30)
     conn.row_factory = sqlite3.Row
+    # WAL: nebenläufige Leser blockieren den Schreiber nicht → deutlich weniger Locks.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
 
@@ -118,6 +124,16 @@ def init_db():
             tg_message_id INTEGER PRIMARY KEY,
             email_id      INTEGER,
             created_at    TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # DB-Backups (JSON-Snapshots aller Tabellen, für /backup im Web-UI)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS db_backups (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at TEXT    DEFAULT CURRENT_TIMESTAMP,
+            label      TEXT,
+            data       TEXT
         )
     """)
 
@@ -761,5 +777,159 @@ def get_daily_stats(date: str = None) -> dict:
             WHERE DATE(received_at) = ?
         """, (date,)).fetchone()
         return dict(row) if row else {}
+    finally:
+        conn.close()
+
+
+# ── Listen nach Status / Aktivität (Web-UI) ───────────────────────────────────
+
+def get_emails_by_status(status: str, limit: int = 500) -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, from_address, subject, received_at, processed_at, "
+            "category, account_email, confidence, notes, snooze_until "
+            "FROM emails WHERE status=? ORDER BY received_at DESC LIMIT ?",
+            (status, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_activity_log(limit: int = 100) -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT timestamp, action, email_id, details "
+            "FROM activity_log ORDER BY id DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_account_email_for_id(email_id: int) -> str:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT account_email FROM emails WHERE id=?", (email_id,)
+        ).fetchone()
+        return (row["account_email"] or "") if row else ""
+    finally:
+        conn.close()
+
+
+# ── Backup / Restore (JSON-Snapshots aller Tabellen) ──────────────────────────
+
+BACKUP_TABLES = ["emails", "commitments", "templates", "learned_responses",
+                 "activity_log", "tg_pending_map"]
+
+
+def dump_all_tables() -> dict:
+    """Serialisiert alle Backup-Tabellen als JSON-fähiges dict {tabelle: [zeilen]}."""
+    conn = get_conn()
+    try:
+        data = {}
+        for table in BACKUP_TABLES:
+            rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+            data[table] = [dict(r) for r in rows]
+        return data
+    finally:
+        conn.close()
+
+
+def create_backup(label: str = None) -> int:
+    """Exportiert alle Tabellen als JSON-Snapshot in db_backups. Gibt Backup-ID zurück."""
+    if not label:
+        label = f"Backup {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+    backup_json = json.dumps(dump_all_tables(), ensure_ascii=False)
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO db_backups (label, data, created_at) VALUES (?, ?, ?)",
+            (label, backup_json, datetime.now().isoformat())
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def get_backups() -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, created_at, label, LENGTH(data) AS size_bytes "
+            "FROM db_backups ORDER BY id DESC"
+        ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            ca = d.get("created_at") or ""
+            try:
+                d["created_at_str"] = datetime.fromisoformat(ca).strftime("%d.%m.%Y %H:%M")
+            except Exception:
+                d["created_at_str"] = str(ca)
+            d["size_kb"] = round((d.get("size_bytes") or 0) / 1024, 1)
+            result.append(d)
+        return result
+    finally:
+        conn.close()
+
+
+def get_backup_data(backup_id: int) -> dict | None:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT data, label FROM db_backups WHERE id=?", (backup_id,)
+        ).fetchone()
+        if not row:
+            return None
+        return {"label": row["label"], "data": json.loads(row["data"])}
+    finally:
+        conn.close()
+
+
+def restore_backup(backup_id: int) -> dict:
+    """Stellt ein Backup wieder her: leert die Tabellen und re-inserted aus JSON."""
+    backup = get_backup_data(backup_id)
+    if not backup:
+        raise ValueError(f"Backup #{backup_id} nicht gefunden.")
+    data = backup["data"]
+    conn = get_conn()
+    try:
+        restored = {}
+        # Reihenfolge wegen Foreign Keys: abhängige Tabellen zuerst leeren
+        for table in reversed(BACKUP_TABLES):
+            conn.execute(f"DELETE FROM {table}")
+        conn.commit()
+        for table in BACKUP_TABLES:
+            rows = data.get(table, [])
+            if not rows:
+                restored[table] = 0
+                continue
+            cols = list(rows[0].keys())
+            placeholders = ",".join(["?"] * len(cols))
+            col_str = ",".join(cols)
+            for row in rows:
+                vals = [row.get(col) for col in cols]
+                conn.execute(
+                    f"INSERT OR IGNORE INTO {table} ({col_str}) VALUES ({placeholders})",
+                    vals
+                )
+            restored[table] = len(rows)
+        conn.commit()
+        return restored
+    finally:
+        conn.close()
+
+
+def delete_backup(backup_id: int):
+    conn = get_conn()
+    try:
+        conn.execute("DELETE FROM db_backups WHERE id=?", (backup_id,))
+        conn.commit()
     finally:
         conn.close()

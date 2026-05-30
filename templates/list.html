@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">{{ title }}</div>
+<div class="text-muted-sm mb-4">{{ subtitle }} — {{ emails|length }} Einträge</div>
+
+<!-- Filter Form -->
+<div class="card mb-4">
+  <div class="card-body py-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-4">
+        <label class="form-label">Suche</label>
+        <input type="text" name="q" value="{{ filter_search or '' }}" class="form-control form-control-sm"
+               placeholder="Betreff, Absender oder Inhalt …">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Kategorie</label>
+        <select name="category" class="form-select form-select-sm">
+          <option value="">Alle</option>
+          {% for c in ['ANFRAGE','BESCHWERDE','BESTELLUNG','SUPPORT','ALLGEMEIN','PORTAL','WERBUNG'] %}
+            <option value="{{ c }}" {% if filter_category == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if accounts %}
+      <div class="col-md-3">
+        <label class="form-label">Konto</label>
+        <select name="account" class="form-select form-select-sm">
+          <option value="">Alle</option>
+          {% for acc in accounts %}
+            <option value="{{ acc }}" {% if filter_account == acc %}selected{% endif %}>{{ acc }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="col-md-2">
+        <label class="form-label">Zeitraum</label>
+        <select name="period" class="form-select form-select-sm">
+          <option value="" {% if not filter_period %}selected{% endif %}>Alle</option>
+          <option value="today" {% if filter_period == 'today' %}selected{% endif %}>Heute</option>
+          <option value="week" {% if filter_period == 'week' %}selected{% endif %}>7 Tage</option>
+          <option value="month" {% if filter_period == 'month' %}selected{% endif %}>30 Tage</option>
+        </select>
+      </div>
+      <div class="col-12 d-flex gap-2 mt-1">
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel"></i>Filtern</button>
+        <a href="?" class="btn btn-secondary btn-sm">Zurücksetzen</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if not emails %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-{{ icon }}"></i>
+    <div class="fw-semibold">{{ empty_text }}</div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4" style="width:50px;">#</th>
+          <th>Betreff</th>
+          <th>Von</th>
+          <th style="width:135px;">Datum</th>
+          {% if show_notes %}<th>Grund / Notiz</th>{% endif %}
+          {% if show_category %}<th style="width:110px;">Kategorie</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        {% set cat_colors = {'ANFRAGE':'primary','BESCHWERDE':'danger','BESTELLUNG':'success','SUPPORT':'info','ALLGEMEIN':'secondary','PORTAL':'warning','WERBUNG':'secondary'} %}
+        <tr class="email-row" onclick="location.href='/email/{{ e.id }}'">
+          <td class="ps-4 text-muted">{{ e.id }}</td>
+          <td class="fw-semibold">{{ (e.subject or '–')[:55] }}</td>
+          <td class="text-muted">{{ (e.from_address or '')[:35] }}</td>
+          <td class="text-muted" style="font-size:.8rem;">{{ (e.received_at or e.processed_at or '')[:16] }}</td>
+          {% if show_notes %}
+          <td class="text-muted" style="font-size:.8rem;">{{ (e.notes or '')[:80] }}</td>
+          {% endif %}
+          {% if show_category %}
+          <td>
+            <span class="badge bg-{{ cat_colors.get(e.category or '', 'secondary') }}">{{ e.category or '–' }}</span>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

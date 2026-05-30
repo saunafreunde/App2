@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Snooze – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Snooze – Erinnerungen</div>
+<div class="text-muted-sm mb-4">{{ emails|length }} E-Mail(s) warten auf Reaktivierung</div>
+
+{% if not emails %}
+<div class="card">
+  <div class="card-body empty-state">
+    <i class="bi bi-moon"></i>
+    <div class="fw-semibold">Keine geschnoozten E-Mails</div>
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body p-0">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th class="ps-4">#</th>
+          <th>Betreff</th>
+          <th>Von</th>
+          <th>Erinnerung</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        <tr>
+          <td class="ps-4 text-muted">{{ e.id }}</td>
+          <td class="fw-semibold">
+            <a href="/email/{{ e.id }}" class="text-decoration-none" style="color:rgba(255,255,255,0.85);">
+              {{ (e.subject or '–')[:55] }}
+            </a>
+          </td>
+          <td class="text-muted">{{ (e.from_address or '')[:35] }}</td>
+          <td class="text-muted" style="font-size:.83rem;">
+            <i class="bi bi-bell me-1"></i>{{ (e.snooze_until or '')[:16] }}
+          </td>
+          <td class="pe-3 text-end">
+            <a href="/unsnooze/{{ e.id }}" class="btn btn-outline-primary btn-sm">
+              <i class="bi bi-bell"></i>Jetzt aufwecken
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

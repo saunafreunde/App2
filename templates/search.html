@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Suche – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="page-header mb-1">Suchergebnisse</div>
+<div class="text-muted-sm mb-4">
+  {% if query %}{{ results|length }} Treffer für „<strong>{{ query }}</strong>"{% else %}Bitte Suchbegriff eingeben.{% endif %}
+</div>
+
+{% if query %}
+  {% if not results %}
+  <div class="card">
+    <div class="card-body empty-state">
+      <i class="bi bi-search"></i>
+      <div class="fw-semibold">Keine Ergebnisse</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th class="ps-4">#</th>
+            <th>Betreff</th>
+            <th>Von</th>
+            <th>Datum</th>
+            <th>Status</th>
+            <th>Konto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in results %}
+          {% set s_colors = {'sent':'success','pending_review':'warning','manual':'info','filtered':'secondary','rejected':'danger','snoozed':'info','error':'danger'} %}
+          <tr class="email-row" onclick="location.href='/email/{{ e.id }}'">
+            <td class="ps-4 text-muted">{{ e.id }}</td>
+            <td class="fw-semibold">{{ (e.subject or '–')[:55] }}</td>
+            <td class="text-muted">{{ (e.from_address or '')[:35] }}</td>
+            <td class="text-muted" style="font-size:.8rem;">{{ (e.received_at or '')[:10] }}</td>
+            <td><span class="badge bg-{{ s_colors.get(e.status,'secondary') }}">{{ e.status }}</span></td>
+            <td class="text-muted" style="font-size:.8rem;">{{ (e.account_email or '')[:25] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

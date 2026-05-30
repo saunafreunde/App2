@@ -10,10 +10,16 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Cache-Buster: Wert ändern erzwingt Rebuild ab hier
-ARG CACHE_BUST=1
+ARG CACHE_BUST=2
 RUN echo "Build: $CACHE_BUST"
 
 COPY *.py ./
+COPY email_template.html ./
+COPY templates/ ./templates/
+COPY static/ ./static/
+
+# Syntax-Check beim Build: bricht ab, falls eine .py-Datei kaputt ist
+RUN python -m compileall -q .
 
 RUN mkdir -p /app/data /app/reports
 
