@@ -150,6 +150,16 @@ def init_db():
         )
     """)
 
+    # App-Einstellungen / Integrationen (JTL-Shop, JTL-WAWI, DHL, Feature-Schalter)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            skey       TEXT PRIMARY KEY,
+            svalue     TEXT,
+            is_secret  INTEGER DEFAULT 0,
+            updated_at TEXT
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("  Datenbank initialisiert.")
@@ -1061,5 +1071,43 @@ def _seed_knowledge_if_empty():
         except Exception:
             pass
         print(f"  Wissensbasis-Seed übersprungen ({e})")
+    finally:
+        conn.close()
+
+
+# ── App-Einstellungen / Integrationen (JTL, DHL, Feature-Schalter) ─────────────
+
+def get_setting(key: str, default: str = "") -> str:
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT svalue FROM app_settings WHERE skey=?", (key,)
+        ).fetchone()
+        return row["svalue"] if row and row["svalue"] is not None else default
+    finally:
+        conn.close()
+
+
+def set_setting(key: str, value: str, is_secret: int = 0):
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO app_settings (skey, svalue, is_secret, updated_at) "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(skey) DO UPDATE SET svalue=excluded.svalue, "
+            "is_secret=excluded.is_secret, updated_at=excluded.updated_at",
+            (key, value, is_secret, datetime.now().isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_settings_dict() -> dict:
+    """Alle Einstellungen als {key: value}-dict (fürs Formular)."""
+    conn = get_conn()
+    try:
+        rows = conn.execute("SELECT skey, svalue FROM app_settings").fetchall()
+        return {r["skey"]: (r["svalue"] or "") for r in rows}
     finally:
         conn.close()

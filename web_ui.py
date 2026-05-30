@@ -630,6 +630,83 @@ def knowledge_delete(kid: int):
     return redirect(url_for("knowledge_list"))
 
 
+# ── Integrationen / Einstellungen (JTL, DHL, Feature-Schalter) ────────────────
+
+INTEGRATION_SECTIONS = [
+    {
+        "title": "JTL-Shop", "icon": "bi-shop",
+        "hint": "REST-API deines JTL-Shops – für Bestell-, Kunden- und Sendungsdaten.",
+        "fields": [
+            {"key": "jtl_shop_url",   "label": "Shop-URL",  "secret": False,
+             "ph": "https://www.radschrauben123.de"},
+            {"key": "jtl_shop_token", "label": "API-Token", "secret": True, "ph": ""},
+        ],
+    },
+    {
+        "title": "JTL-WAWI", "icon": "bi-box-seam",
+        "hint": "Warenwirtschaft – für Bestellstatus, Lagerbestand und Tracking-Nummern.",
+        "fields": [
+            {"key": "jtl_wawi_url",  "label": "WAWI-API-URL",      "secret": False, "ph": ""},
+            {"key": "jtl_wawi_user", "label": "Benutzer",          "secret": False, "ph": ""},
+            {"key": "jtl_wawi_pass", "label": "Passwort / Token",  "secret": True,  "ph": ""},
+        ],
+    },
+    {
+        "title": "DHL Sendungsverfolgung", "icon": "bi-truck",
+        "hint": "Für automatische Antworten auf „Wo ist mein Paket?“ mit Live-Status.",
+        "fields": [
+            {"key": "dhl_api_key", "label": "DHL API-Key",        "secret": True,  "ph": ""},
+            {"key": "dhl_ekp",     "label": "Kundennummer (EKP)", "secret": False, "ph": ""},
+        ],
+    },
+]
+
+FEATURE_TOGGLES = [
+    {"key": "feat_strong_model", "label": "Stärkeres Modell (Sonnet) für Beschwerden, Mahnungen & dringende Mails"},
+    {"key": "feat_autolearn",    "label": "Wissensbasis lernt automatisch (Vorschläge aus gesendeten Antworten)"},
+]
+
+_SECRET_MASK = "••••••••"
+
+
+@app.route("/integrationen")
+def integrationen_view():
+    saved = db.get_settings_dict()
+    sections = []
+    for sec in INTEGRATION_SECTIONS:
+        fields = []
+        for f in sec["fields"]:
+            val = saved.get(f["key"], "")
+            display = _SECRET_MASK if (f["secret"] and val) else val
+            fields.append({**f, "value": display, "configured": bool(val)})
+        sections.append({**sec, "fields": fields})
+    toggles = [{**t, "on": saved.get(t["key"]) == "1"} for t in FEATURE_TOGGLES]
+    return render_template(
+        "integrationen.html",
+        active="integrationen",
+        pending_count=_pending_count(),
+        sections=sections,
+        toggles=toggles,
+    )
+
+
+@app.route("/integrationen/save", methods=["POST"])
+def integrationen_save():
+    for sec in INTEGRATION_SECTIONS:
+        for f in sec["fields"]:
+            val = request.form.get(f["key"], "")
+            if f["secret"]:
+                # Maske unverändert → Secret nicht überschreiben
+                if val and val != _SECRET_MASK:
+                    db.set_setting(f["key"], val.strip(), is_secret=1)
+            else:
+                db.set_setting(f["key"], val.strip(), is_secret=0)
+    for t in FEATURE_TOGGLES:
+        db.set_setting(t["key"], "1" if request.form.get(t["key"]) else "0", is_secret=0)
+    flash("✓ Einstellungen gespeichert.", "success")
+    return redirect(url_for("integrationen_view"))
+
+
 # ── Aufgaben / Versprechen ───────────────────────────────────────────────────
 
 @app.route("/aufgaben")

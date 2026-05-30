@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Integrationen – Mail Agent{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <div class="page-header">Integrationen &amp; Einstellungen</div>
+    <div class="text-muted-sm mt-1">Zugangsdaten für JTL &amp; DHL sowie Funktions-Schalter</div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body" style="font-size:.85rem;color:rgba(255,255,255,0.75);">
+    <i class="bi bi-info-circle me-2"></i>
+    Trage hier deine API-Zugänge ein. Die Anbindungen (Bestell-Abruf, Sendungsverfolgung)
+    werden Schritt für Schritt scharf geschaltet — die hinterlegten Daten nutzt der Bot dann
+    automatisch. Passwörter werden verschlüsselt gespeichert und nie im Klartext angezeigt.
+  </div>
+</div>
+
+<form method="post" action="/integrationen/save" autocomplete="off">
+  <div class="row g-3">
+    {% for sec in sections %}
+    <div class="col-md-6">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="fw-bold mb-1">
+            <i class="bi {{ sec.icon }} me-2"></i>{{ sec.title }}
+            {% if sec.fields|selectattr('configured')|list %}
+            <span class="badge bg-success ms-2">verbunden</span>
+            {% else %}
+            <span class="badge bg-secondary ms-2">offen</span>
+            {% endif %}
+          </div>
+          <div class="text-muted-sm mb-3" style="font-size:.78rem;">{{ sec.hint }}</div>
+          {% for f in sec.fields %}
+          <div class="mb-2">
+            <label class="form-label text-muted-sm">{{ f.label }}</label>
+            <input name="{{ f.key }}" class="form-control"
+                   type="{% if f.secret %}password{% else %}text{% endif %}"
+                   value="{{ f.value }}" placeholder="{{ f.ph }}" autocomplete="off">
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card mt-3">
+    <div class="card-body">
+      <div class="fw-bold mb-3"><i class="bi bi-toggles me-2"></i>Funktionen</div>
+      {% for t in toggles %}
+      <div class="form-check form-switch mb-2">
+        <input class="form-check-input" type="checkbox" name="{{ t.key }}"
+               id="{{ t.key }}" {% if t.on %}checked{% endif %}>
+        <label class="form-check-label" for="{{ t.key }}">{{ t.label }}</label>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <button class="btn btn-primary"><i class="bi bi-check-lg"></i>Speichern</button>
+  </div>
+</form>
+{% endblock %}
