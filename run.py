@@ -152,11 +152,22 @@ def main():
             except Exception as e:
                 print(f"Fehler Auto-Backup: {e}")
 
+        def auto_learn():
+            # Nur wenn im Web-UI aktiviert (Integrationen → Auto-Lernen)
+            try:
+                if db.get_setting("feat_autolearn", "0") == "1":
+                    n = agent.mine_knowledge_suggestions()
+                    if n:
+                        print(f"  → {n} neue Wissens-Vorschläge")
+            except Exception as e:
+                print(f"Fehler Auto-Lernen: {e}")
+
         schedule.every(interval).minutes.do(run_and_catch)
         schedule.every(5).minutes.do(send_scheduled)
         schedule.every().day.at(report_time).do(send_report)
         schedule.every().day.at(todo_time).do(send_todo_list)
         schedule.every().day.at("02:00").do(auto_backup)
+        schedule.every().day.at("03:00").do(auto_learn)
 
         # Telegram-Bot-Thread starten
         try:

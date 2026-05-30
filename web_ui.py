@@ -592,7 +592,36 @@ def knowledge_list():
         active="knowledge",
         pending_count=_pending_count(),
         entries=db.get_knowledge(active_only=False),
+        suggestions=db.get_suggestions("pending"),
     )
+
+
+@app.route("/knowledge/mine", methods=["POST"])
+def knowledge_mine():
+    try:
+        agent.setup(load_config())
+        n = agent.mine_knowledge_suggestions()
+        if n:
+            flash(f"✓ {n} neue Vorschläge gefunden.", "success")
+        else:
+            flash("Keine neuen Vorschläge — die Wissensbasis ist aktuell.", "info")
+    except Exception as e:
+        flash(f"Fehler bei der Suche: {e}", "danger")
+    return redirect(url_for("knowledge_list"))
+
+
+@app.route("/knowledge/suggestion/<int:sid>/accept", methods=["POST"])
+def knowledge_suggestion_accept(sid: int):
+    db.accept_suggestion(sid)
+    flash("✓ Vorschlag in die Wissensbasis übernommen.", "success")
+    return redirect(url_for("knowledge_list"))
+
+
+@app.route("/knowledge/suggestion/<int:sid>/reject", methods=["POST"])
+def knowledge_suggestion_reject(sid: int):
+    db.reject_suggestion(sid)
+    flash("Vorschlag verworfen.", "warning")
+    return redirect(url_for("knowledge_list"))
 
 
 @app.route("/knowledge/new", methods=["POST"])

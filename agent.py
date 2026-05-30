@@ -963,3 +963,65 @@ def reject_email(email_id: int, reason: str = ""):
         print(f"  → Lernfeedback gespeichert: \"{reason.strip()[:80]}\"")
 
     print(f"✓ E-Mail {email_id} abgelehnt.")
+
+
+# ── Selbstlernende Wissensbasis ───────────────────────────────────────────────
+
+def mine_knowledge_suggestions(limit: int = 30) -> int:
+    """Analysiert kürzlich gesendete (freigegebene) Antworten und schlägt neue
+    Wissensbasis-Einträge vor. Gibt die Anzahl NEUER Vorschläge zurück."""
+    samples = db.get_sent_for_learning(limit)
+    if not samples:
+        return 0
+
+    existing = db.get_knowledge(active_only=False)
+    existing_topics = ", ".join(e.get("topic", "") for e in existing) or "(noch nichts)"
+
+    qa_lines = []
+    for s in samples:
+        frage   = ((s.get("subject") or "") + " — " + (s.get("body") or "")[:300]).strip()
+        antwort = (s.get("sent_reply") or "")[:300].strip()
+        qa_lines.append(f"FRAGE: {frage}\nUNSERE ANTWORT: {antwort}")
+    qa_block = "\n\n".join(qa_lines)
+
+    prompt = f"""Analysiere echte, von uns freigegebene Kunden-Antworten und extrahiere
+WIEDERVERWENDBARE Firmenfakten/FAQ für unsere Wissensbasis.
+
+BEREITS VORHANDENE THEMEN (NICHT doppeln): {existing_topics}
+
+REGELN:
+- Nur allgemein gültige Fakten/Policies (Versand, Rückgabe, Zahlung, Produkte, Abläufe).
+- KEINE kundenspezifischen Details (Namen, Bestellnummern, Einzelfälle).
+- Nur was sich für künftige Antworten wiederverwenden lässt.
+- Maximal 5 Vorschläge. Wenn nichts Neues dabei ist, gib [] zurück.
+
+Antworte AUSSCHLIESSLICH als JSON-Array, z.B.:
+[{{"topic": "Zahlungsarten", "content": "Wir akzeptieren PayPal, Kreditkarte und Rechnung."}}]
+
+ECHTE KONVERSATIONEN:
+{qa_block}"""
+
+    try:
+        resp = _client.messages.create(
+            model=_config["claude"].get("model", "claude-haiku-4-5-20251001"),
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = (resp.content[0].text or "").strip()
+        m = re.search(r"\[.*\]", text, re.DOTALL)
+        items = json.loads(m.group(0)) if m else []
+    except Exception as e:
+        print(f"  Wissens-Mining fehlgeschlagen: {e}")
+        return 0
+
+    added = 0
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        topic   = (it.get("topic") or "").strip()
+        content = (it.get("content") or "").strip()
+        if topic and content and db.save_suggestion(topic, content, source="auto"):
+            added += 1
+    if added:
+        print(f"  💡 {added} neue Wissens-Vorschläge erzeugt.")
+    return added

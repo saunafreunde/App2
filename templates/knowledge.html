@@ -11,6 +11,49 @@
   </div>
 </div>
 
+<!-- Selbstlernen: Vorschläge des Bots -->
+<div class="card mb-4" style="border-color:rgba(255,193,7,0.35);">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
+      <div class="fw-bold">
+        <i class="bi bi-lightbulb me-2 text-warning"></i>Vorschläge des Bots
+        {% if suggestions %}<span class="badge bg-warning text-dark ms-2">{{ suggestions|length }}</span>{% endif %}
+      </div>
+      <form method="post" action="/knowledge/mine">
+        <button class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-search"></i>Jetzt nach neuem Wissen suchen
+        </button>
+      </form>
+    </div>
+    <div class="text-muted-sm mb-2" style="font-size:.78rem;">
+      Der Bot liest deine zuletzt gesendeten Antworten und schlägt wiederverwendbare Fakten vor — du entscheidest mit einem Klick.
+    </div>
+    {% if not suggestions %}
+    <div class="text-muted-sm" style="font-size:.82rem;">
+      <i class="bi bi-check-circle me-1"></i>Keine offenen Vorschläge.
+    </div>
+    {% else %}
+    {% for s in suggestions %}
+    <div class="d-flex justify-content-between align-items-start gap-2 py-2"
+         style="border-top:1px solid rgba(255,255,255,0.07);">
+      <div>
+        <div class="fw-semibold" style="font-size:.9rem;">{{ s.topic }}</div>
+        <div class="text-muted-sm" style="font-size:.82rem;">{{ s.content }}</div>
+      </div>
+      <div class="d-flex gap-1 flex-shrink-0">
+        <form method="post" action="/knowledge/suggestion/{{ s.id }}/accept">
+          <button class="btn btn-success btn-sm py-1 px-2" title="Übernehmen"><i class="bi bi-check-lg"></i></button>
+        </form>
+        <form method="post" action="/knowledge/suggestion/{{ s.id }}/reject">
+          <button class="btn btn-outline-secondary btn-sm py-1 px-2" title="Verwerfen"><i class="bi bi-x-lg"></i></button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+
 <!-- Neuer Eintrag -->
 <div class="card mb-4">
   <div class="card-body">

@@ -160,6 +160,18 @@ def init_db():
         )
     """)
 
+    # Wissens-Vorschläge (selbstlernend – aus gesendeten Antworten extrahiert)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS knowledge_suggestions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            topic      TEXT,
+            content    TEXT,
+            source     TEXT,
+            status     TEXT    DEFAULT 'pending',
+            created_at TEXT    DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
     print("  Datenbank initialisiert.")
@@ -1109,5 +1121,90 @@ def get_settings_dict() -> dict:
     try:
         rows = conn.execute("SELECT skey, svalue FROM app_settings").fetchall()
         return {r["skey"]: (r["svalue"] or "") for r in rows}
+    finally:
+        conn.close()
+
+
+# ── Selbstlernende Wissensbasis (Vorschläge) ──────────────────────────────────
+
+def get_sent_for_learning(limit: int = 30) -> list[dict]:
+    """Kürzlich gesendete (menschlich freigegebene) Antworten als Lernquelle."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT subject, body, sent_reply FROM emails "
+            "WHERE status='sent' AND sent_reply IS NOT NULL AND sent_reply != '' "
+            "ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_suggestions(status: str = "pending") -> list[dict]:
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, topic, content, source, status, created_at "
+            "FROM knowledge_suggestions WHERE status=? ORDER BY id DESC",
+            (status,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def save_suggestion(topic: str, content: str, source: str = "auto") -> int:
+    """Speichert einen Vorschlag – aber nur, wenn das Thema nicht schon in der
+    Wissensbasis oder als offener Vorschlag existiert (Dedup)."""
+    t_low = (topic or "").strip().lower()
+    if not t_low or not (content or "").strip():
+        return 0
+    conn = get_conn()
+    try:
+        exists = conn.execute(
+            "SELECT 1 FROM knowledge_base WHERE lower(topic)=? "
+            "UNION SELECT 1 FROM knowledge_suggestions "
+            "WHERE lower(topic)=? AND status='pending'",
+            (t_low, t_low)
+        ).fetchone()
+        if exists:
+            return 0
+        cur = conn.execute(
+            "INSERT INTO knowledge_suggestions (topic, content, source, status, created_at) "
+            "VALUES (?, ?, ?, 'pending', ?)",
+            (topic.strip(), content.strip(), source, datetime.now().isoformat())
+        )
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def accept_suggestion(sid: int):
+    """Übernimmt einen Vorschlag in die Wissensbasis und markiert ihn als angenommen."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT topic, content FROM knowledge_suggestions WHERE id=?", (sid,)
+        ).fetchone()
+        if not row:
+            return
+        conn.execute(
+            "INSERT INTO knowledge_base (topic, content, shop, sort_order, created_at) "
+            "VALUES (?, ?, 'beide', 100, ?)",
+            (row["topic"], row["content"], datetime.now().isoformat())
+        )
+        conn.execute("UPDATE knowledge_suggestions SET status='accepted' WHERE id=?", (sid,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def reject_suggestion(sid: int):
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE knowledge_suggestions SET status='rejected' WHERE id=?", (sid,))
+        conn.commit()
     finally:
         conn.close()
