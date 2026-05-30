@@ -559,6 +559,33 @@ def save_template(name: str, category: str, keywords: str,
 
 # ── E-Mail verarbeiten ────────────────────────────────────────────────────────
 
+# ── Modell-Wahl: Sonnet für heikle Fälle (ID verifiziert verfügbar) ───────────
+
+STRONG_MODEL = "claude-sonnet-4-6"
+
+_SENSITIVE_KEYWORDS = [
+    "mahnung", "inkasso", "anwalt", "rechtsanwalt", "klage", "gericht", "abmahnung",
+    "widerruf", "beschwerde", "reklamation", "unzufrieden", "enttäuscht", "ärger",
+    "frist", "schadenersatz", "kündigung", "betrug", "strafanzeige", "verbraucherzentrale",
+]
+
+
+def _is_sensitive_email(email_data: dict) -> bool:
+    text = ((email_data.get("subject") or "") + " " + (email_data.get("body") or "")).lower()
+    return any(kw in text for kw in _SENSITIVE_KEYWORDS)
+
+
+def _pick_model(email_data: dict) -> str:
+    """Sonnet für heikle Fälle, wenn der Schalter (Integrationen) an ist – sonst Haiku."""
+    default = _config["claude"].get("model", "claude-haiku-4-5-20251001")
+    try:
+        if db.get_setting("feat_strong_model", "0") == "1" and _is_sensitive_email(email_data):
+            return db.get_setting("strong_model", "") or STRONG_MODEL
+    except Exception:
+        pass
+    return default
+
+
 def process_email(email_data: dict):
     sender_ctx = db.get_sender_context(email_data.get("from_address", ""))
 
@@ -579,7 +606,7 @@ def process_email(email_data: dict):
     )
 
     runner = _client.beta.messages.tool_runner(
-        model=_config["claude"].get("model", "claude-haiku-4-5-20251001"),
+        model=_pick_model(email_data),
         max_tokens=1024,
         system=[{
             "type": "text",
