@@ -118,6 +118,13 @@ def pre_filter(email_data: dict) -> str | None:
     subject   = (email_data.get("subject") or "").lower()
     body      = (email_data.get("body") or "").lower()
 
+    # 0. Eigene automatische Mails (Tages-Report/ToDo an die eigenen Konten) NIE
+    #    verarbeiten – sonst löst der Report seinen eigenen Dringend-Alert aus.
+    own_accounts = {_extract_email_addr((a.get("email") or "").lower())
+                    for a in (_config.get("accounts") or []) if a.get("email")}
+    if from_addr and from_addr in own_accounts:
+        return "filtered"
+
     # 1. Noreply / Newsletter – zuerst! (kann keine echte Dringlichkeit sein)
     for pat in _NOREPLY_PATTERNS:
         if pat in from_addr:
@@ -887,6 +894,13 @@ def process_all_emails():
                 status  = updated.get("status", "?") if updated else "?"
                 conf    = updated.get("confidence") if updated else None
                 conf_s  = f"  ({conf:.0%})" if conf is not None else ""
+
+                # Sicherheitsnetz: hängt die Mail noch auf 'pending' (Claude hat keinen
+                # Status gesetzt), zur Prüfung markieren – sonst Endlos-Verarbeitung.
+                if status == "pending":
+                    db.update_email(mail["id"], status="pending_review",
+                                    notes="Keine klare Einstufung – bitte prüfen")
+                    status = "pending_review"
 
                 # Telegram-Benachrichtigung bei pending_review (nur im Modus "all")
                 if status == "pending_review" and _telegram_mode() == "all":
