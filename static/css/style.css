@@ -414,6 +414,11 @@ html, body {
 
 /* ── Tables ─────────────────────────────────────────────────── */
 .table {
+  /* Bootstrap-Default ist weiss (#fff) -> im Dark-Theme transparent machen,
+     sonst liegt ein weisses Feld ueber dem hellen Text (nur beim Hover weg). */
+  --bs-table-bg: transparent;
+  --bs-table-color: rgba(255,255,255,0.75);
+  --bs-table-accent-bg: transparent;
   color: var(--text);
   border-collapse: separate;
   border-spacing: 0;
